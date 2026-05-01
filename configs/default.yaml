@@ -1,0 +1,63 @@
+# Default configuration for the FMLLMadvantage pipeline.
+#
+# Every script reads this file (or a derivative) through
+# fmllm.utils.config.load_config, which validates the YAML against the
+# Pydantic schema in src/fmllm/utils/config.py. Adding a new section
+# requires editing both files together.
+#
+# The section blocks are stubs. Each phase fleshes out the relevant
+# section as that component lands.
+
+run_id_format: "%Y%m%d-%H%M%S-{slug}"
+
+seeds:
+  numpy: 0
+  torch: 0
+  python: 0
+
+dataset:
+  root: "data/synthetic_lj_v1"
+  num_specimens: 50000
+  num_holdout: 10000
+  n_choices: [5, 7, 9, 11, 13, 17, 19, 21, 25, 30]
+  n_in_distribution: [5, 7, 9, 11, 13]
+  n_ood: [17, 19, 21, 25, 30]
+  t_min: 0.1
+  t_max: 2.0
+  t_in_distribution_max: 1.0
+  image_size: 64
+  rdf_bins: 200
+  md_steps_per_specimen: 100
+
+fm1:
+  name: "fm1_image"
+  checkpoint_root: "checkpoints"
+  epochs: 50
+  batch_size: 64
+  learning_rate: 3.0e-4
+  weight_decay: 1.0e-2
+
+fm2:
+  name: "fm2_rdf"
+  checkpoint_root: "checkpoints"
+  epochs: 50
+  batch_size: 128
+  learning_rate: 3.0e-4
+  weight_decay: 1.0e-2
+
+fm3:
+  name: "fm3_traj"
+  checkpoint_root: "checkpoints"
+  epochs: 50
+  batch_size: 32
+  learning_rate: 2.0e-4
+  weight_decay: 1.0e-2
+
+verifier:
+  literature_db: "data/literature/clusters.json"
+  conformal_alpha_levels: [0.10, 0.20]
+
+orchestrator:
+  llm_model: "meta-llama/Llama-3.1-8B-Instruct"
+  step_budget: 16
+  temperature: 0.2
