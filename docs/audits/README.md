@@ -7,5 +7,6 @@ check pass / fail / fixed, and signs off only when every check passes.
 ## Files
 
 - `00-init-audit.md` - Phase 0 audit.
+- `01-testbed-audit.md` - Phase 1 audit.
 
 Subsequent phases add one audit report each.

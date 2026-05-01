@@ -11,6 +11,7 @@ One markdown document per pipeline phase. Each document records:
 ## Files
 
 - `00-init.md` - Phase 0, repository initialization.
+- `01-testbed.md` - Phase 1, synthetic Lennard-Jones testbed.
 
-Subsequent phases (Phase 1 through Phase 9) add one progress document
+Subsequent phases (Phase 2 through Phase 9) add one progress document
 each as those phases land.

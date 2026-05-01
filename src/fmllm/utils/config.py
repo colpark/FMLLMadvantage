@@ -39,11 +39,7 @@ class SeedsConfig(_StrictModel):
 
 
 class DatasetConfig(_StrictModel):
-    """Synthetic Lennard-Jones dataset parameters.
-
-    The defaults match the Phase 1 plan. We will refine the schema as
-    the data generator lands.
-    """
+    """Synthetic Lennard-Jones dataset parameters."""
 
     root: str = "data/synthetic_lj_v1"
     num_specimens: int = 50000
@@ -63,6 +59,26 @@ class DatasetConfig(_StrictModel):
     image_size: int = 64
     rdf_bins: int = 200
     md_steps_per_specimen: int = 100
+
+    # MD integrator and equilibration.
+    md_dt: float = 0.005
+    md_equilibration_steps: int = 400
+    md_thermostat_every: int = 20
+    confinement_k: float = 0.05
+
+    # Image rasterization.
+    image_pixel_size_lj: float = 0.15
+    image_blur_radius_lj: float = 0.20
+    image_noise_std: float = 0.0
+
+    # RDF binning and pair-distance window.
+    rdf_r_max: float = 6.0
+
+    # Generator runtime.
+    perturbation_std: float = 0.02
+    generator_batch_size: int = 256
+    generator_master_seed: int = 1234
+    holdout_fraction: float | None = None  # None means use num_holdout
 
 
 class FMConfig(_StrictModel):

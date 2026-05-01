@@ -11,9 +11,11 @@ chains of thought.
 
 ## Status
 
-Phase 0 complete. The repository scaffolding exists, the dependency stack
-lives in `pyproject.toml`, and `scripts/remote_bootstrap.sh` brings up the
-remote GPU host. No data generated yet. No models trained yet.
+Phase 1 complete. Phase 0 set up the repository, dependency stack, and
+remote bootstrap. Phase 1 added the LJ Hamiltonian, MD integrator,
+cluster structures, observables, the synthetic-dataset generator CLI,
+HDF5 dataset reader, and held-out split machinery. The generator runs
+on the remote. No data generated yet. No models trained yet.
 
 Per-phase notes live under `docs/progress/`.
 

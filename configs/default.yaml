@@ -15,8 +15,15 @@ seeds:
   torch: 0
   python: 0
 
-# dataset: Phase 1 fleshes this out alongside the data generator.
-# Phase 1 will also add HDF5 layout details and per-specimen schema.
+# dataset: Phase 1 generator parameters.
+# Generator behavior:
+#   - For each specimen ID i, sample N from n_choices, sample T
+#     log-uniform on [t_min, t_max], pick a motif consistent with N,
+#     equilibrate via MD with a velocity-rescaling thermostat, then
+#     record a md_steps_per_specimen-step trajectory snippet plus
+#     image and RDF observables.
+#   - The HDF5 layout uses fixed-size arrays padded to max(n_choices)
+#     atoms with a per-specimen atom-count mask.
 dataset:
   root: "data/synthetic_lj_v1"
   num_specimens: 50000
@@ -30,6 +37,26 @@ dataset:
   image_size: 64
   rdf_bins: 200
   md_steps_per_specimen: 100
+
+  # MD integrator and equilibration.
+  md_dt: 0.005
+  md_equilibration_steps: 400
+  md_thermostat_every: 20
+  confinement_k: 0.05
+
+  # Image rasterization.
+  image_pixel_size_lj: 0.15
+  image_blur_radius_lj: 0.20
+  image_noise_std: 0.0
+
+  # RDF binning and pair-distance window.
+  rdf_r_max: 6.0
+
+  # Generator runtime.
+  perturbation_std: 0.02
+  generator_batch_size: 256
+  generator_master_seed: 1234
+  holdout_fraction: null
 
 # fm1, fm2, fm3: Phase 2 fleshes these out alongside model architectures.
 # Phase 2 will add architecture-specific fields (depth, hidden size, heads)
