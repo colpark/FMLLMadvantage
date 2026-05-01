@@ -38,10 +38,16 @@ htmlcov/
 *.so
 wandb/
 
-# Generated artifacts (keep manifests committed)
-runs/
-checkpoints/
+# Generated artifacts. Keep the directory README and manifest YAMLs
+# tracked so the directory stays meaningful in a fresh clone.
+runs/*
+!runs/README.md
+
+checkpoints/*
+!checkpoints/README.md
+
 data/*
+!data/README.md
 !data/literature/
 !data/**/*.yaml
 !data/**/manifest.yaml

@@ -44,6 +44,19 @@
   one of `tests/test_utils.py::test_load_config_repo_default` or
   `test_load_config_rejects_unknown_keys` failing.
 
+## Audit fixes (post-initial)
+
+A self-audit (see `docs/audits/00-init-audit.md`) caught four gaps and
+applied the fixes here:
+
+- Added READMEs to `runs/`, `data/`, `checkpoints/`, and
+  `docs/progress/`. Updated `.gitignore` so the first three READMEs
+  stay tracked even though the directories themselves stay ignored.
+- Added phase-naming comments to each placeholder section in
+  `configs/default.yaml`.
+- Corrected the test count from 14 to 13 to match the actual
+  `tests/test_utils.py` suite.
+
 ## What I did not do
 
 - No `uv sync` ran locally. No GPU touched. No remote command issued.
@@ -67,7 +80,7 @@ Expected outcome:
 - `uv sync --extra dev` resolves the lock and installs the dev
   dependencies. On non-Linux hosts torch installs as the CPU build,
   which is fine for the utility tests.
-- `pytest` collects 14 tests under `tests/test_utils.py` and reports
+- `pytest` collects 13 tests under `tests/test_utils.py` and reports
   every test as passed.
 
 ### Remote 4xH100 host
