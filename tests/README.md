@@ -24,6 +24,10 @@ that does not require a GPU.
   consistent `ProbeReport` for FM1.
 - `test_cross_fm_tolerance.py` - pairwise tolerance computation on
   synthetic records and YAML round-trip.
+- `test_bridges.py` - structure-preserving and language-anchored
+  bridges. Verifies BridgedFMOutput JSON round-trip, per-FM payload
+  correctness, calibration fall-back behavior, factory dispatch by
+  FM name, and caption parser round-trip.
 
 ## Running
 

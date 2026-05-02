@@ -11,14 +11,20 @@ chains of thought.
 
 ## Status
 
-Phase 2 complete. Phase 0 set up the repository, dependency stack, and
+Phase 3 complete. Phase 0 set up the repository, dependency stack, and
 remote bootstrap. Phase 1 added the LJ Hamiltonian, MD integrator,
 synthetic-dataset generator CLI, HDF5 dataset reader, and held-out
 split machinery. Phase 2 implements the three foundation models (image
 ViT, RDF transformer, trajectory transformer) plus their training
-loops and split-conformal calibrators. `scripts/train_fm.py` is the
-unified CLI. Both data generation and FM training run on the remote.
-No data generated yet. No models trained yet.
+loops and split-conformal calibrators. The Phase 2.5 addendum retrofit
+elevated constraint extraction to first-class status (per-FM metadata,
+behavioral probes, cross-FM tolerance, BridgedFMOutput schema) and
+extended training to three nested data scales for the E5 quality
+sweep. Phase 3 implements both bridge flavors: the structure-
+preserving bridge emits typed `BridgedFMOutput` Pydantic objects, and
+the language-anchored bridge emits parseable natural-language
+captions. Both consume an `FMContext` that loads metadata, probe
+report, and conformal calibration from disk.
 
 Per-phase notes live under `docs/progress/`.
 
