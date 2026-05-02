@@ -23,7 +23,7 @@ from typing import Any
 import torch
 from loguru import logger
 from torch import Tensor, nn
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 from torch.distributions import Gamma
 from torch.utils.data import DataLoader
 
@@ -159,7 +159,7 @@ def _epoch(
         prepared = _prepare_batch(batch, device=device, cfg=cfg)
         with torch.set_grad_enabled(train):
             if use_amp and train:
-                with autocast(dtype=torch.float16):
+                with autocast(device_type="cuda", dtype=torch.float16):
                     outputs = model(
                         prepared["traj_positions"],
                         prepared["traj_velocities"],
@@ -265,7 +265,7 @@ def train(
         steps_per_epoch=max(1, len(train_loader)),
         warmup_epochs=fm.warmup_epochs,
     )
-    scaler = GradScaler() if (fm.mixed_precision and dev.type == "cuda") else None
+    scaler = GradScaler(device="cuda") if (fm.mixed_precision and dev.type == "cuda") else None
 
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info("Model parameter count: {:.2f}M", n_params / 1.0e6)

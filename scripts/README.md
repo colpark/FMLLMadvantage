@@ -12,6 +12,10 @@ in this directory directly; nothing here imports from another script.
   calibration. Use `--fm fm1` (or fm2 / fm3) and pass paths to the
   HDF5 dataset and splits YAML. See `docs/progress/02-fms.md` for the
   parallel-launch recipe across GPUs 0, 1, 2.
+- `train_fm_sweep.sh` - convenience driver that trains FM1, FM2, FM3
+  in parallel across GPUs 0, 1, 2 for one or more training scales.
+  Defaults to the full E5 sweep (`train_10k`, `train_30k`,
+  `train_50k`). Pass scale names as positional arguments to override.
 
 Subsequent phases will add:
 - `run_pipeline.py` - end-to-end orchestration loop (Phase 5).
