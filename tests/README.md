@@ -13,6 +13,8 @@ that does not require a GPU.
   rasterizer accuracy, structure generators, MB velocities.
 - `test_data.py` - splits assignment, splits YAML round trip, the
   HDF5-backed `LJSpecimenDataset` reader.
+- `test_fms.py` - forward-pass shapes and physics-constraint losses for
+  FM1 / FM2 / FM3, plus conformal-quantile and calibration-file tests.
 
 ## Running
 

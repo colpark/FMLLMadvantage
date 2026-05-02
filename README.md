@@ -11,11 +11,14 @@ chains of thought.
 
 ## Status
 
-Phase 1 complete. Phase 0 set up the repository, dependency stack, and
+Phase 2 complete. Phase 0 set up the repository, dependency stack, and
 remote bootstrap. Phase 1 added the LJ Hamiltonian, MD integrator,
-cluster structures, observables, the synthetic-dataset generator CLI,
-HDF5 dataset reader, and held-out split machinery. The generator runs
-on the remote. No data generated yet. No models trained yet.
+synthetic-dataset generator CLI, HDF5 dataset reader, and held-out
+split machinery. Phase 2 implements the three foundation models (image
+ViT, RDF transformer, trajectory transformer) plus their training
+loops and split-conformal calibrators. `scripts/train_fm.py` is the
+unified CLI. Both data generation and FM training run on the remote.
+No data generated yet. No models trained yet.
 
 Per-phase notes live under `docs/progress/`.
 

@@ -58,9 +58,7 @@ dataset:
   generator_master_seed: 1234
   holdout_fraction: null
 
-# fm1, fm2, fm3: Phase 2 fleshes these out alongside model architectures.
-# Phase 2 will add architecture-specific fields (depth, hidden size, heads)
-# and the conformal calibration block per FM.
+# fm1, fm2, fm3: Phase 2 architectures and training hyperparameters.
 fm1:
   name: "fm1_image"
   checkpoint_root: "checkpoints"
@@ -68,6 +66,27 @@ fm1:
   batch_size: 64
   learning_rate: 3.0e-4
   weight_decay: 1.0e-2
+  grad_clip: 1.0
+  warmup_epochs: 2
+  num_workers: 4
+  mixed_precision: true
+  val_fraction: 0.10
+  calib_fraction: 0.10
+  conformal_alpha_levels: [0.10, 0.20]
+  image_size: 64
+  patch_size: 8
+  embed_dim: 256
+  encoder_depth: 8
+  decoder_depth: 4
+  num_heads: 8
+  mlp_ratio: 4.0
+  num_queries: 32
+  max_n_atoms: 30
+  box_half_width_lj: 4.8
+  count_weight: 1.0
+  position_weight: 5.0
+  confidence_weight: 1.0
+  box_constraint_weight: 0.1
 
 fm2:
   name: "fm2_rdf"
@@ -76,6 +95,21 @@ fm2:
   batch_size: 128
   learning_rate: 3.0e-4
   weight_decay: 1.0e-2
+  grad_clip: 1.0
+  warmup_epochs: 2
+  num_workers: 4
+  mixed_precision: true
+  val_fraction: 0.10
+  calib_fraction: 0.10
+  conformal_alpha_levels: [0.10, 0.20]
+  rdf_bins: 200
+  embed_dim: 320
+  depth: 6
+  num_heads: 8
+  mlp_ratio: 4.0
+  energy_floor: -3.0
+  nonneg_weight: 0.1
+  huber_delta: 0.5
 
 fm3:
   name: "fm3_traj"
@@ -84,6 +118,21 @@ fm3:
   batch_size: 32
   learning_rate: 2.0e-4
   weight_decay: 1.0e-2
+  grad_clip: 1.0
+  warmup_epochs: 2
+  num_workers: 4
+  mixed_precision: true
+  val_fraction: 0.10
+  calib_fraction: 0.10
+  conformal_alpha_levels: [0.10, 0.20]
+  n_steps_input: 100
+  max_n_atoms: 30
+  embed_dim: 320
+  depth: 10
+  num_heads: 8
+  mlp_ratio: 4.0
+  equipartition_weight: 0.1
+  nll_clip: 50.0
 
 # verifier: Phase 4 fleshes this out alongside the multi-source verifier.
 # Phase 4 will add per-source thresholds, simulator parameters, and the

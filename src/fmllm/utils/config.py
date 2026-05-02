@@ -82,7 +82,7 @@ class DatasetConfig(_StrictModel):
 
 
 class FMConfig(_StrictModel):
-    """Per-foundation-model training configuration."""
+    """Common training fields for every foundation model."""
 
     name: str
     checkpoint_root: str = "checkpoints"
@@ -90,6 +90,61 @@ class FMConfig(_StrictModel):
     batch_size: int = 64
     learning_rate: float = 3.0e-4
     weight_decay: float = 1.0e-2
+    grad_clip: float = 1.0
+    warmup_epochs: int = 2
+    num_workers: int = 4
+    mixed_precision: bool = True
+    val_fraction: float = 0.10
+    calib_fraction: float = 0.10
+    conformal_alpha_levels: list[float] = Field(default_factory=lambda: [0.10, 0.20])
+
+
+class FM1Config(FMConfig):
+    """FM1 image Vision Transformer hyperparameters."""
+
+    name: str = "fm1_image"
+    image_size: int = 64
+    patch_size: int = 8
+    embed_dim: int = 256
+    encoder_depth: int = 8
+    decoder_depth: int = 4
+    num_heads: int = 8
+    mlp_ratio: float = 4.0
+    num_queries: int = 32
+    max_n_atoms: int = 30
+    box_half_width_lj: float = 4.8
+    count_weight: float = 1.0
+    position_weight: float = 5.0
+    confidence_weight: float = 1.0
+    box_constraint_weight: float = 0.1
+
+
+class FM2Config(FMConfig):
+    """FM2 RDF Transformer hyperparameters."""
+
+    name: str = "fm2_rdf"
+    rdf_bins: int = 200
+    embed_dim: int = 320
+    depth: int = 6
+    num_heads: int = 8
+    mlp_ratio: float = 4.0
+    energy_floor: float = -3.0
+    nonneg_weight: float = 0.1
+    huber_delta: float = 0.5
+
+
+class FM3Config(FMConfig):
+    """FM3 trajectory Transformer hyperparameters."""
+
+    name: str = "fm3_traj"
+    n_steps_input: int = 100
+    max_n_atoms: int = 30
+    embed_dim: int = 320
+    depth: int = 10
+    num_heads: int = 8
+    mlp_ratio: float = 4.0
+    equipartition_weight: float = 0.1
+    nll_clip: float = 50.0
 
 
 class VerifierConfig(_StrictModel):
@@ -115,9 +170,9 @@ class Config(_StrictModel):
     run_id_format: str = "%Y%m%d-%H%M%S-{slug}"
     seeds: SeedsConfig = Field(default_factory=SeedsConfig)
     dataset: DatasetConfig = Field(default_factory=DatasetConfig)
-    fm1: FMConfig = Field(default_factory=lambda: FMConfig(name="fm1_image"))
-    fm2: FMConfig = Field(default_factory=lambda: FMConfig(name="fm2_rdf"))
-    fm3: FMConfig = Field(default_factory=lambda: FMConfig(name="fm3_traj"))
+    fm1: FM1Config = Field(default_factory=FM1Config)
+    fm2: FM2Config = Field(default_factory=FM2Config)
+    fm3: FM3Config = Field(default_factory=FM3Config)
     verifier: VerifierConfig = Field(default_factory=VerifierConfig)
     orchestrator: OrchestratorConfig = Field(default_factory=OrchestratorConfig)
 
