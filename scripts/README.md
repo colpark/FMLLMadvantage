@@ -46,14 +46,26 @@ in this directory directly; nothing here imports from another script.
   specimen. Default LLM is Llama 3.1 8B Instruct via
   `transformers`. Supports `--mock-script` for smoke tests without
   LLM weights.
+- `run_pipeline_smoke.sh` - bash wrapper around `run_pipeline.py`
+  with the mock LLM. Pass specimen ID and (optional) train_split
+  as positional args (defaults: 42, train_50k). Tail-calls
+  `inspect_trajectory.sh` on the resulting run.
+- `run_pipeline_real.sh` - bash wrapper around `run_pipeline.py`
+  with the real chat LLM (Llama 3.1 8B Instruct by default; swap
+  via `LLM_MODEL`). First run downloads ~16 GB of weights.
+- `inspect_trajectory.sh` - pretty-prints a saved
+  `trajectory.json`. With no arg it picks the latest pipeline-A
+  run; with one arg accepts either a run directory or an explicit
+  file path.
 - `mock_scripts/` - hard-coded LLM response sequences for
   `--mock-script` smoke runs.
 
 Subsequent phases will add:
-- `run_pipeline.py` - end-to-end orchestration loop (Phase 5).
 - `train_pipeline_b.py` - Pipeline B RL fine-tuning (Phase 6).
 - `run_evaluation.py` - the eight world-model tests (Phase 7).
 - `exp_e1_composition_curve.py` - E1 composition sweep (Phase 8).
 - `exp_e2_train_vs_inference.py` - E2 Pipeline A vs B (Phase 8).
 - `exp_e3_bridge_anchor.py` - E3 bridge comparison (Phase 8).
+- `exp_e4_verifier_ablation.py` - E4 verifier ablation (Phase 8).
+- `exp_e5_fm_quality_sweep.py` - E5 FM quality sweep (Phase 8).
 - `reproduce_all.sh` - end-to-end reproducibility harness (Phase 9).
