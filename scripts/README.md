@@ -16,6 +16,11 @@ in this directory directly; nothing here imports from another script.
   in parallel across GPUs 0, 1, 2 for one or more training scales.
   Defaults to the full E5 sweep (`train_10k`, `train_30k`,
   `train_50k`). Pass scale names as positional arguments to override.
+- `save_data_samples.py` - saves an inspectable subset of the
+  synthetic dataset. Per specimen: rasterized image PNG, RDF plot,
+  initial-position scatter, trajectory overlay, summary YAML. Plus
+  a multi-panel grid of images and RDFs. Stratify by atom count or
+  pass explicit `--indices` to pick exact specimens. CPU-only.
 
 Subsequent phases will add:
 - `run_pipeline.py` - end-to-end orchestration loop (Phase 5).
