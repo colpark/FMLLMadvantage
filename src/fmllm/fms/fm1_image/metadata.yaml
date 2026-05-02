@@ -1,0 +1,46 @@
+name: fm1_image
+version: "0.1.0"
+modality: image
+
+input_schema:
+  shape: ["B", 1, 64, 64]
+  dtype: float32
+  normalization: "raw rasterized intensity, no per-pixel normalization"
+
+output_schema:
+  output_type: atom_set
+  semantic_name: atom_positions_lj
+  units: lj_units
+  value_range: [-4.8, 4.8]
+
+physics_constraints:
+  - name: translation_equivariance
+    type: hard
+    description: "Shifts of the input image by integer multiples of patch_size pixels produce equal shifts in predicted atom positions."
+    expected_satisfaction: 0.90
+    probe: fmllm.fms.fm1_image.probes.translation_equivariance
+
+  - name: atom_count_consistency
+    type: hard
+    description: "The atom-count head agrees with the number of high-confidence query slots after thresholding the objectness logits."
+    expected_satisfaction: 0.95
+    probe: fmllm.fms.fm1_image.probes.atom_count_consistency
+
+  - name: positions_in_box
+    type: hard
+    description: "All predicted atom positions lie inside the imaging box of half-width box_half_width_lj."
+    expected_satisfaction: 0.99
+    probe: fmllm.fms.fm1_image.probes.positions_in_box
+
+dependencies:
+  - target_variable: atom_count
+    relationship: derives
+    confidence: 0.95
+    description: "Atom count derives directly from the count head's argmax and consistency with the thresholded objectness logits."
+
+  - target_variable: positions_in_box
+    relationship: requires
+    confidence: 1.0
+    description: "Predicted positions must lie inside the simulation box."
+
+references: []

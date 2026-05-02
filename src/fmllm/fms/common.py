@@ -29,7 +29,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 
 from fmllm.data.dataset import LJSpecimenDataset
-from fmllm.data.splits import load_splits_yaml
+from fmllm.data.splits import load_splits_yaml, select_train_subset
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +84,7 @@ def make_dataloaders(
     calib_fraction: float,
     keys: Iterable[str] | None = None,
     seed: int = 0,
+    train_split: str = "train_full",
 ) -> tuple[DataLoader, DataLoader, DataLoader, dict[str, list[int]]]:
     """Open the dataset and return train, val, calibration loaders.
 
@@ -91,11 +92,22 @@ def make_dataloaders(
     so every FM gets the same partition of the training pool. The
     holdout split that lives in ``splits_path`` stays untouched here;
     Phase 7 reads it for the world-model evaluation tests.
+
+    Args:
+        train_split: Selects which nested training subset to use.
+            ``"train_full"`` (the default) uses the entire training
+            pool. ``"train_10k"``, ``"train_30k"``, ``"train_50k"``
+            select the nested subsets the splits YAML records under
+            ``train_subsets``. The FM-quality sweep (E5) trains each
+            FM at all three scales.
     """
     splits = load_splits_yaml(splits_path)
-    train_pool = list(splits.get("train", []))
+    train_pool = select_train_subset(splits, train_split)
     if not train_pool:
-        raise ValueError(f"splits file {splits_path} has no train entries")
+        raise ValueError(
+            f"splits file {splits_path} produced empty train pool for "
+            f"train_split={train_split!r}"
+        )
 
     sub = deterministic_train_val_calib_split(
         train_pool,

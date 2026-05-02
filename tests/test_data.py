@@ -19,6 +19,7 @@ from fmllm.data.splits import (
     cell_label,
     load_splits_yaml,
     save_splits_yaml,
+    select_train_subset,
 )
 
 
@@ -105,6 +106,61 @@ def test_assign_splits_holdout_too_large():
             num_holdout=20,
             seed=0,
         )
+
+
+def test_nested_train_subsets_are_strictly_nested():
+    """train_10k subset of train_30k subset of train_50k subset of train pool."""
+    rng = np.random.default_rng(0)
+    num = 200
+    atom_counts = rng.choice([5, 7, 9, 13, 17, 25], size=num).tolist()
+    temperatures = rng.uniform(0.1, 2.0, size=num).tolist()
+    splits = assign_splits(
+        specimen_ids=list(range(num)),
+        atom_counts=atom_counts,
+        temperatures=temperatures,
+        n_in_distribution=[5, 7, 9, 11, 13],
+        t_in_distribution_max=1.0,
+        num_holdout=40,
+        seed=42,
+        nested_train_scales=[20, 60, 100],
+    )
+    train_pool = set(splits["train"])
+    subsets = splits["train_subsets"]
+    s20 = set(subsets["train_20"])
+    s60 = set(subsets["train_60"])
+    s100 = set(subsets["train_100"])
+    assert s20 <= s60 <= s100 <= train_pool
+    assert len(s20) == 20
+    assert len(s60) == 60
+    assert len(s100) == 100
+
+
+def test_nested_scales_clamp_to_pool_size():
+    """A nested scale larger than the train pool clamps to the pool size."""
+    splits = assign_splits(
+        specimen_ids=list(range(50)),
+        atom_counts=[7] * 50,
+        temperatures=[0.5] * 50,
+        n_in_distribution=[5, 7, 9, 11, 13],
+        t_in_distribution_max=1.0,
+        num_holdout=10,
+        seed=0,
+        nested_train_scales=[10, 30, 100],
+    )
+    train_pool = splits["train"]
+    assert len(splits["train_subsets"]["train_10"]) == 10
+    assert len(splits["train_subsets"]["train_30"]) == 30
+    # The 100 scale clamps to len(train_pool) = 40.
+    assert len(splits["train_subsets"]["train_100"]) == len(train_pool)
+
+
+def test_select_train_subset_returns_full_for_train_full():
+    from fmllm.data.splits import select_train_subset
+    splits = {"train": [1, 2, 3], "train_subsets": {"train_10k": [1]}}
+    assert select_train_subset(splits, "train_full") == [1, 2, 3]
+    assert select_train_subset(splits, "train_10k") == [1]
+    with pytest.raises(KeyError):
+        select_train_subset(splits, "train_99k")
 
 
 def test_splits_yaml_round_trip(tmp_path: Path):

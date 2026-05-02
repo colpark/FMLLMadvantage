@@ -15,6 +15,15 @@ that does not require a GPU.
   HDF5-backed `LJSpecimenDataset` reader.
 - `test_fms.py` - forward-pass shapes and physics-constraint losses for
   FM1 / FM2 / FM3, plus conformal-quantile and calibration-file tests.
+- `test_fm_metadata.py` - per-FM `metadata.yaml` validates against the
+  schema and every declared probe path imports.
+- `test_bridge_schema.py` - `BridgedFMOutput` JSON round-trip plus the
+  per-FM typed value payloads.
+- `test_probes.py` - every probe runs end-to-end on a tiny model and
+  produces a valid `ProbeResult`. The probe runner produces a
+  consistent `ProbeReport` for FM1.
+- `test_cross_fm_tolerance.py` - pairwise tolerance computation on
+  synthetic records and YAML round-trip.
 
 ## Running
 

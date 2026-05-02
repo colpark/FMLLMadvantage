@@ -261,6 +261,7 @@ def train(
     out_dir: Path | str | None = None,
     device: str | torch.device = "auto",
     epochs: int | None = None,
+    train_split: str = "train_full",
 ) -> Path:
     """Run FM1 training end to end and return the checkpoint path."""
     fm = cfg.fm1
@@ -274,15 +275,18 @@ def train(
     else:
         dev = device
 
-    run_id = generate_run_id(f"{fm.name}-train")
+    run_id = generate_run_id(f"{fm.name}-{train_split}-train")
     run_dir = Path("runs") / run_id
     configure_logging(run_dir)
     if out_dir is None:
-        out_dir = Path(fm.checkpoint_root) / fm.name / run_id
+        out_dir = Path(fm.checkpoint_root) / fm.name / train_split / run_id
     else:
         out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    logger.info("FM1 training: device={}, epochs={}, out={}", dev, epochs, out_dir)
+    logger.info(
+        "FM1 training: device={}, epochs={}, train_split={}, out={}",
+        dev, epochs, train_split, out_dir,
+    )
 
     train_loader, val_loader, calib_loader, sub = make_dataloaders(
         h5_path, splits_path,
@@ -292,6 +296,7 @@ def train(
         calib_fraction=fm.calib_fraction,
         keys=("image", "traj_positions", "atom_count", "atom_mask", "specimen_id"),
         seed=cfg.seeds.numpy,
+        train_split=train_split,
     )
     logger.info(
         "Dataset split: train={}, val={}, calib={}",
@@ -356,6 +361,23 @@ def train(
     elapsed = time.time() - t_start
     logger.info("Training done in {:.1f}s. Best val total: {:.4f}", elapsed, best_val)
 
+    # Run behavioral probes against the best checkpoint and save the report.
+    from fmllm.fms.common import load_checkpoint
+    from fmllm.fms.probe_runner import collect_items_from_loader, run_all_probes
+    from fmllm.fms._schemas import save_probe_report
+
+    load_checkpoint(best_path, model=model, map_location=dev)
+    val_items = collect_items_from_loader(val_loader, n_items=64)
+    probe_report = run_all_probes(
+        fm.name, model=model, items=val_items, device=dev,
+    )
+    probe_report_path = out_dir / "probe_report.yaml"
+    save_probe_report(probe_report, probe_report_path)
+    logger.info(
+        "Probe report saved to {} ({} probes)",
+        probe_report_path, len(probe_report.results),
+    )
+
     write_manifest(
         out_dir / "manifest.yaml",
         script="fmllm.fms.fm1_image.train",
@@ -365,6 +387,7 @@ def train(
             "run_id": run_id,
             "device": str(dev),
             "epochs": epochs,
+            "train_split": train_split,
         },
         extra={
             "n_params": n_params,
@@ -372,6 +395,12 @@ def train(
             "split_sizes": {k: len(v) for k, v in sub.items()},
             "elapsed_seconds": elapsed,
             "history": history,
+            "probe_report_path": str(probe_report_path),
+            "probe_summary": [
+                {"name": r.constraint_name, "score": r.satisfaction_score,
+                 "passes": r.passes_threshold}
+                for r in probe_report.results
+            ],
         },
     )
     return best_path

@@ -1,5 +1,31 @@
 # Phase 2: The Three Foundation Models
 
+## Addendum retrofit (Phase 2.5)
+
+After the initial Phase 2 commit, the project addendum extended the
+spec with three new architectural commitments (declarative metadata,
+behavioral probes, BridgedFMOutput schema) and one experimental
+extension (FM training at three nested scales for E5). The retrofit
+landed as commit `<see git log>` and added:
+
+- `src/fmllm/fms/_schemas/` (`metadata_schema.py`, `bridge_schema.py`,
+  `probe_schema.py`).
+- `src/fmllm/fms/_calibration/cross_fm_tolerance.py`.
+- Per-FM `metadata.yaml`, `bridge_schema.py`, and `probes/<constraint>.py`
+  (3 probes per FM, 9 total).
+- `src/fmllm/fms/probe_runner.py` for dispatching probes after
+  training.
+- Nested training subsets in `data/splits.py` (`train_10k`,
+  `train_30k`, `train_50k`).
+- `--train-split` flag on `scripts/train_fm.py` plus checkpoint path
+  reorganization to `checkpoints/<fm>/<train_split>/<run_id>/`.
+- `docs/constraints.md` and `docs/experiments.md`.
+
+See `docs/audits/02-fms-retrofit-audit.md` for the audit report on
+the retrofit.
+
+The remainder of this document describes the original Phase 2 build.
+
 ## What I built
 
 ### FM common utilities (`src/fmllm/fms/common.py`)
@@ -147,26 +173,42 @@ checkpoint plus manifest under
 
 #### Step 2. Train all three FMs to convergence in parallel
 
-Launch the three trainings on GPUs 0, 1, 2 simultaneously:
+The addendum requires training each FM at three nested scales for
+the E5 quality sweep. Run each scale in turn (the GPUs spread the
+three FMs in parallel, then move to the next scale). Replace
+`<SCALE>` with each of `train_10k`, `train_30k`, `train_50k`.
 
 ```
-( CUDA_VISIBLE_DEVICES=0 uv run python scripts/train_fm.py --fm fm1 \
+for SCALE in train_10k train_30k train_50k; do
+  ( CUDA_VISIBLE_DEVICES=0 uv run python scripts/train_fm.py --fm fm1 \
+        --train-split $SCALE \
         --config configs/default.yaml \
         --h5-path data/synthetic_lj_v1/specimens.h5 \
         --splits-path data/synthetic_lj_v1/splits.yaml \
-        > runs/fm1.log 2>&1 ) &
-( CUDA_VISIBLE_DEVICES=1 uv run python scripts/train_fm.py --fm fm2 \
+        > runs/fm1-$SCALE.log 2>&1 ) &
+  ( CUDA_VISIBLE_DEVICES=1 uv run python scripts/train_fm.py --fm fm2 \
+        --train-split $SCALE \
         --config configs/default.yaml \
         --h5-path data/synthetic_lj_v1/specimens.h5 \
         --splits-path data/synthetic_lj_v1/splits.yaml \
-        > runs/fm2.log 2>&1 ) &
-( CUDA_VISIBLE_DEVICES=2 uv run python scripts/train_fm.py --fm fm3 \
+        > runs/fm2-$SCALE.log 2>&1 ) &
+  ( CUDA_VISIBLE_DEVICES=2 uv run python scripts/train_fm.py --fm fm3 \
+        --train-split $SCALE \
         --config configs/default.yaml \
         --h5-path data/synthetic_lj_v1/specimens.h5 \
         --splits-path data/synthetic_lj_v1/splits.yaml \
-        > runs/fm3.log 2>&1 ) &
-wait
+        > runs/fm3-$SCALE.log 2>&1 ) &
+  wait
+done
 ```
+
+If you only need one quality level (for a quick smoke), use a single
+`--train-split train_50k` invocation per FM and skip the loop.
+
+After each FM training finishes the trainer automatically runs the
+behavioral probes against the best checkpoint on the validation
+items and writes ``probe_report.yaml`` next to ``model.pt`` in the
+checkpoint directory.
 
 Expected runtime per FM on a single H100 with default config and
 50K specimens:

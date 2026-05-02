@@ -72,6 +72,15 @@ def main(
         None, "--epochs", "-e",
         help="Override epoch count from the config.",
     ),
+    train_split: str = typer.Option(
+        "train_full", "--train-split",
+        help=(
+            "Which nested training subset to use. 'train_full' uses every "
+            "training specimen. 'train_10k', 'train_30k', 'train_50k' select "
+            "the nested subsets the splits YAML records under train_subsets, "
+            "as required by the FM-quality sweep (E5)."
+        ),
+    ),
     calibrate_only: bool = typer.Option(
         False, "--calibrate-only",
         help="Skip training. Run conformal calibration on an existing checkpoint.",
@@ -117,6 +126,7 @@ def main(
         out_dir=out_dir,
         device=device,
         epochs=epochs,
+        train_split=train_split,
     )
     typer.echo(f"Best checkpoint at {out}")
 

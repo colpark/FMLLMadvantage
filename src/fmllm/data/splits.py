@@ -32,6 +32,8 @@ import yaml
 
 
 CELL_LABELS = ("in_n_in_t", "in_n_ood_t", "ood_n_in_t", "ood_n_ood_t")
+DEFAULT_TRAIN_SCALES: tuple[int, ...] = (10_000, 30_000, 50_000)
+"""Default nested training scales for the FM-quality sweep (E5)."""
 
 
 def cell_label(
@@ -56,13 +58,18 @@ def assign_splits(
     t_in_distribution_max: float,
     num_holdout: int,
     seed: int = 0,
+    nested_train_scales: Sequence[int] | None = None,
 ) -> dict[str, Any]:
     """Assign each specimen to ``train`` or one of the four holdout cells.
 
     The function draws ``num_holdout`` specimen IDs uniformly at
     random, then labels each held-out specimen by its
-    ``(N_axis, T_axis)`` cell. The remaining specimens form the
-    training set.
+    ``(N_axis, T_axis)`` cell. The remaining specimens form the full
+    training pool. Nested subsets of the training pool serve the
+    FM-quality sweep (E5): the function shuffles the pool with a
+    derived seed and exposes prefix-sized subsets at the requested
+    scales. ``train_X ⊆ train_Y`` whenever ``X <= Y``, and every
+    nested subset is a subset of the full ``train`` list.
 
     Args:
         specimen_ids: Iterable of unique integer IDs.
@@ -74,11 +81,18 @@ def assign_splits(
             temperature interval (inclusive).
         num_holdout: Total number of held-out specimens.
         seed: Random seed for the holdout draw.
+        nested_train_scales: Sizes of the nested training subsets used
+            by the E5 quality sweep. Defaults to
+            ``DEFAULT_TRAIN_SCALES`` (``10_000, 30_000, 50_000``). Each
+            requested scale gets clamped to the available training
+            pool size, so a scale larger than the pool resolves to the
+            full pool.
 
     Returns:
         A dict with keys ``train`` (sorted list of IDs), ``holdout``
-        (dict mapping cell label to sorted list of IDs), ``meta``
-        (a small dict that records the parameters used).
+        (dict mapping cell label to sorted list of IDs),
+        ``train_subsets`` (dict mapping scale label like ``train_10k``
+        to a sorted list of IDs), and ``meta``.
     """
     ids = np.asarray(list(specimen_ids), dtype=np.int64)
     n_arr = np.asarray(list(atom_counts), dtype=np.int64)
@@ -114,17 +128,66 @@ def assign_splits(
     for label in CELL_LABELS:
         holdout_buckets[label].sort()
 
+    scales = (
+        tuple(int(x) for x in nested_train_scales)
+        if nested_train_scales is not None
+        else DEFAULT_TRAIN_SCALES
+    )
+    if any(s <= 0 for s in scales):
+        raise ValueError(f"nested_train_scales must be positive, got {scales}")
+
+    rng_scale = np.random.default_rng(seed + 1000)
+    shuffled = list(train_ids)
+    rng_scale.shuffle(shuffled)
+    train_subsets: dict[str, list[int]] = {}
+    for scale in scales:
+        actual = min(scale, len(shuffled))
+        train_subsets[_scale_label(scale)] = sorted(int(x) for x in shuffled[:actual])
+
     return {
         "train": train_ids,
         "holdout": holdout_buckets,
+        "train_subsets": train_subsets,
         "meta": {
             "num_specimens": int(ids.shape[0]),
             "num_holdout": int(num_holdout),
             "n_in_distribution": [int(x) for x in n_in_distribution],
             "t_in_distribution_max": float(t_in_distribution_max),
             "seed": int(seed),
+            "nested_train_scales": list(scales),
+            "nested_actual_sizes": {
+                _scale_label(s): len(train_subsets[_scale_label(s)]) for s in scales
+            },
         },
     }
+
+
+def _scale_label(scale: int) -> str:
+    """Return the canonical key for a training scale.
+
+    Examples: 10_000 -> ``train_10k``, 30_000 -> ``train_30k``,
+    50_000 -> ``train_50k``, 12_500 -> ``train_12500``.
+    """
+    if scale % 1000 == 0:
+        return f"train_{scale // 1000}k"
+    return f"train_{scale}"
+
+
+def select_train_subset(splits: dict[str, Any], scale_label: str) -> list[int]:
+    """Look up a nested training subset by its scale label.
+
+    Falls back to the full ``train`` list if ``scale_label`` is
+    ``"train_full"`` or matches the meta's largest scale.
+    """
+    if scale_label in {"train_full", "train"}:
+        return list(splits.get("train", []))
+    train_subsets = splits.get("train_subsets", {})
+    if scale_label not in train_subsets:
+        raise KeyError(
+            f"unknown train scale {scale_label!r}; "
+            f"available: {sorted(train_subsets.keys())}"
+        )
+    return list(train_subsets[scale_label])
 
 
 def save_splits_yaml(splits: dict[str, Any], path: Path | str) -> Path:
@@ -147,8 +210,10 @@ def load_splits_yaml(path: Path | str) -> dict[str, Any]:
 
 __all__ = [
     "CELL_LABELS",
+    "DEFAULT_TRAIN_SCALES",
     "assign_splits",
     "cell_label",
     "load_splits_yaml",
     "save_splits_yaml",
+    "select_train_subset",
 ]

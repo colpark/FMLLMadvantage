@@ -9,5 +9,6 @@ check pass / fail / fixed, and signs off only when every check passes.
 - `00-init-audit.md` - Phase 0 audit.
 - `01-testbed-audit.md` - Phase 1 audit.
 - `02-fms-audit.md` - Phase 2 audit.
+- `02-fms-retrofit-audit.md` - Phase 2.5 retrofit audit (addendum).
 
 Subsequent phases add one audit report each.

@@ -1,0 +1,41 @@
+name: fm3_traj
+version: "0.1.0"
+modality: trajectory
+
+input_schema:
+  shape: ["B", 101, 30, 4]
+  dtype: float32
+  normalization: "raw positions and velocities; padded atoms zeroed"
+
+output_schema:
+  output_type: gamma_distribution
+  semantic_name: kinetic_energy_distribution
+  units: lj_per_atom
+  value_range: [0.0, 100.0]
+
+physics_constraints:
+  - name: equipartition
+    type: soft
+    description: "E[KE per atom] = (d / 2) * T = T (in 2D with unit mass) = alpha * beta. The probe checks |alpha * beta - empirical mean KE| / empirical mean KE on held-out specimens."
+    expected_satisfaction: 0.85
+    probe: fmllm.fms.fm3_traj.probes.equipartition
+
+  - name: distribution_normalization
+    type: hard
+    description: "The Gamma probability density integrates to one over [0, infinity)."
+    expected_satisfaction: 1.0
+    probe: fmllm.fms.fm3_traj.probes.distribution_normalization
+
+  - name: distribution_non_negativity
+    type: hard
+    description: "Gamma shape and scale parameters are positive. The model enforces this with softplus + epsilon."
+    expected_satisfaction: 1.0
+    probe: fmllm.fms.fm3_traj.probes.distribution_non_negativity
+
+dependencies:
+  - target_variable: temperature
+    relationship: derives
+    confidence: 0.95
+    description: "Temperature equals alpha * beta in 2D with unit mass (equipartition)."
+
+references: []

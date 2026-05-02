@@ -6,12 +6,20 @@ Project documentation.
 
 - `architecture.md` - the pipeline diagram and component contracts.
   Phase-specific sections grow as components land.
+- `constraints.md` - the three-layer constraint extraction pipeline,
+  the metadata schema with per-FM examples, the probe interface, the
+  `BridgedFMOutput` schema field by field, and how the verifier
+  consumes constraint information from bridged outputs.
+- `experiments.md` - the five primary experiments (E1, E2, E3, E4,
+  E5) with their hypotheses, manipulations, measurements, and pass
+  criteria.
 - `data-format.md` - the on-disk dataset and trajectory format.
-  Phase 1 fleshes this out.
 - `remote-setup.md` - prerequisites and step-by-step bootstrap for the
   remote 4xH100 host.
 - `progress/` - one markdown document per phase summarizing what was
   built, what the user should verify, and what remains.
+- `audits/` - one self-audit report per phase with pass / fail / fixed
+  per check.
 
 ## Conventions
 

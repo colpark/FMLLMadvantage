@@ -1,0 +1,46 @@
+name: fm2_rdf
+version: "0.1.0"
+modality: rdf
+
+input_schema:
+  shape: ["B", 200]
+  dtype: float32
+  normalization: "raw g(r); no per-bin normalization"
+
+output_schema:
+  output_type: scalar_energy
+  semantic_name: per_atom_potential_energy
+  units: lj_per_atom
+  value_range: [-3.0, 100.0]
+
+physics_constraints:
+  - name: permutation_invariance
+    type: hard
+    description: "g(r) is permutation invariant by construction. The model's prediction is therefore independent of upstream atom ordering."
+    expected_satisfaction: 1.0
+    probe: fmllm.fms.fm2_rdf.probes.permutation_invariance
+
+  - name: extensive_scaling
+    type: soft
+    description: "Total energy = N * per_atom_energy by output design. The probe verifies the model's per-atom energy stays in a stable range across cluster sizes that share local environments."
+    expected_satisfaction: 0.85
+    probe: fmllm.fms.fm2_rdf.probes.extensive_scaling
+
+  - name: non_negativity
+    type: hard
+    description: "Predicted per-atom energy stays at or above the LJ pair-energy floor (about -3 per atom for our cluster sizes)."
+    expected_satisfaction: 0.99
+    probe: fmllm.fms.fm2_rdf.probes.non_negativity
+
+dependencies:
+  - target_variable: atom_count
+    relationship: scales_with
+    confidence: 0.85
+    description: "Per-atom potential energy depends on cluster size through coordination number and surface fraction."
+
+  - target_variable: temperature
+    relationship: derives
+    confidence: 0.70
+    description: "Temperature derives from the broadening of g(r) peaks (second moment of pair distance distribution)."
+
+references: []
