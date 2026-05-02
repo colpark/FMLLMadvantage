@@ -183,11 +183,12 @@ def test_rule_library_flags_position_outside_box_as_fail():
 
 def test_rule_library_caveat_on_atom_count_inconsistency():
     src = RuleLibrarySource()
-    # n_pred=7 but only 3 confident queries -> caveat (constraint is hard).
+    # n_pred=7 but only 3 confident queries. atom_count_consistency is
+    # declared 'soft' in FM1 metadata, so failure produces CAVEAT
+    # rather than aggregate FAIL.
     bridged = [_bridged_fm1(n_pred=7)]
     verdict = src.check(bridged, PhysicalStateClaim())
-    # atom_count_consistency is hard -> FAIL.
-    assert verdict.decision == SourceDecision.FAIL
+    assert verdict.decision == SourceDecision.CAVEAT
 
 
 # ---------------------------------------------------------------------------

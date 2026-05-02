@@ -67,12 +67,17 @@ class SimulatorSource:
         claim: PhysicalStateClaim,
     ) -> SourceVerdict:
         if claim.positions is None or claim.temperature is None:
+            missing = []
+            if claim.positions is None:
+                missing.append("positions")
+            if claim.temperature is None:
+                missing.append("temperature")
             return SourceVerdict(
                 source_name=self.name,
                 decision=SourceDecision.SKIP,
                 confidence=0.0,
-                message="claim lacks positions or temperature; nothing to simulate",
-                evidence={},
+                message=f"claim lacks {' and '.join(missing)}; nothing to simulate",
+                evidence={"missing_fields": missing},
             )
 
         positions = torch.tensor(claim.positions, dtype=torch.float32)

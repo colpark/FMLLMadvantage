@@ -14,18 +14,30 @@ output_schema:
   value_range: [-4.8, 4.8]
 
 physics_constraints:
+  # Translation equivariance is approximate for absolute-positional
+  # ViTs. The probe is a stress test rather than a hard correctness
+  # gate, so a low probe score should produce CAVEAT (not aggregate
+  # FAIL) at verifier time.
   - name: translation_equivariance
-    type: hard
+    type: soft
     description: "Shifts of the input image by integer multiples of patch_size pixels produce equal shifts in predicted atom positions."
     expected_satisfaction: 0.90
     probe: fmllm.fms.fm1_image.probes.translation_equivariance
 
+  # Internal head-consistency check: count-head argmax vs the number
+  # of confidence-thresholded query slots. The two heads train against
+  # separate losses, so they only line up some of the time. Soft so
+  # disagreements between FM1's heads do not reject the LLM's claim
+  # outright; the verifier still surfaces the issue as a caveat.
   - name: atom_count_consistency
-    type: hard
+    type: soft
     description: "The atom-count head agrees with the number of high-confidence query slots after thresholding the objectness logits."
     expected_satisfaction: 0.95
     probe: fmllm.fms.fm1_image.probes.atom_count_consistency
 
+  # Positions outside the imaging box are a real physics violation
+  # (the rasterizer cannot show them and the simulation cell cuts
+  # off there). Kept hard.
   - name: positions_in_box
     type: hard
     description: "All predicted atom positions lie inside the imaging box of half-width box_half_width_lj."
