@@ -130,6 +130,7 @@ def trajectories_to_sft_records(
     *,
     system_prompt: str = DEFAULT_SYSTEM_PROMPT,
     only_passing: bool = True,
+    include_caveat: bool = False,
 ) -> list[dict[str, Any]]:
     """Convert trajectories to SFT training records.
 
@@ -138,22 +139,32 @@ def trajectories_to_sft_records(
         - ``run_id``, ``specimen_id``: provenance.
         - ``aggregate_decision``: the final verifier decision.
         - ``passing``: True iff verifier returned PASS.
+
+    Args:
+        only_passing: When True (default), keep only PASS trajectories.
+            Set to False to also keep FAIL records (rarely useful).
+        include_caveat: When True, also keep CAVEAT trajectories. CAVEAT
+            represents "almost right" reasoning where the LLM committed
+            a coherent claim but at least one verifier source flagged
+            a soft inconsistency. Useful when PASS records are sparse;
+            CAVEAT data still encodes valid action sequences and
+            FM-derived claims.
     """
     out: list[dict[str, Any]] = []
     for t in trajectories:
-        passing = (
-            t.final_verdict is not None
-            and t.final_verdict.aggregate_decision is SourceDecision.PASS
+        decision = (
+            t.final_verdict.aggregate_decision
+            if t.final_verdict is not None else None
         )
-        if only_passing and not passing:
+        passing = decision is SourceDecision.PASS
+        caveat = decision is SourceDecision.CAVEAT
+        keep = passing or (include_caveat and caveat) or not only_passing
+        if not keep:
             continue
         out.append({
             "run_id": t.run_id,
             "specimen_id": t.specimen_id,
-            "aggregate_decision": (
-                t.final_verdict.aggregate_decision.value
-                if t.final_verdict is not None else None
-            ),
+            "aggregate_decision": decision.value if decision is not None else None,
             "passing": passing,
             "messages": trajectory_to_messages(t, system_prompt=system_prompt),
         })

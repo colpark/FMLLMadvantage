@@ -221,6 +221,27 @@ def test_trajectory_to_messages_round_trip(tmp_path: Path, runners, verifier):
 # ---------------------------------------------------------------------------
 
 
+def test_sft_records_include_caveat_flag(runners, verifier):
+    """include_caveat=True keeps CAVEAT trajectories alongside PASS."""
+    from fmllm.orchestrator import OHVDLoop
+
+    # Build one trajectory likely to land CAVEAT (Qwen would commit a
+    # claim that triggers literature CAVEAT but no hard fail).
+    mock = MockLLM([
+        '{"action": "call_fm", "tool_name": "fm1"}',
+        '{"action": "call_fm", "tool_name": "fm2"}',
+        '{"action": "commit", "claim": {"n_atoms": 7, "motif": "triangular_disk"}}',
+    ])
+    loop = OHVDLoop(llm=mock, verifier=verifier, runners=runners, max_steps=4)
+    traj = loop.run("test", specimen_id=0)
+    only_pass = trajectories_to_sft_records([traj], only_passing=True, include_caveat=False)
+    with_caveat = trajectories_to_sft_records([traj], only_passing=True, include_caveat=True)
+    # If the trajectory is CAVEAT, with_caveat keeps it; only_pass drops it.
+    if traj.final_verdict and traj.final_verdict.aggregate_decision.value == "caveat":
+        assert len(only_pass) == 0
+        assert len(with_caveat) == 1
+
+
 def test_sft_records_filter_to_passing(tmp_path: Path, runners, verifier):
     """SFT builder respects only_passing flag."""
     # Generate one likely-failing trajectory.

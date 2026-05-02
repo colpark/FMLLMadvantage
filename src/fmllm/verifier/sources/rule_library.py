@@ -178,12 +178,22 @@ def _check_distribution_normalization(
     }
 
 
+_ATOM_COUNT_TOLERANCE = 2
+"""Allowed off-by-N between FM1's count head and confidence-thresholded query count.
+
+Set-prediction with confidence thresholding produces natural noise; exact
+equality is an unrealistic gate. Off-by-2 catches major head disagreement
+while tolerating ordinary confidence-edge effects.
+"""
+
+
 @register_check("atom_count_consistency")
 def _check_atom_count_consistency(
     bridged: BridgedFMOutput, claim: PhysicalStateClaim,
 ) -> dict[str, Any]:
     """Confirm FM1's AtomSet's predicted atom count matches the number
-    of confidence-thresholded query slots in its payload."""
+    of confidence-thresholded query slots in its payload, within an
+    off-by-N tolerance."""
     value = bridged.prediction.value or {}
     n_pred = value.get("n_atoms_pred")
     positions = value.get("positions", [])
@@ -194,19 +204,31 @@ def _check_atom_count_consistency(
             "evidence": {},
         }
     n_kept = len(positions)
-    if int(n_pred) == n_kept:
+    diff = abs(int(n_pred) - n_kept)
+    if diff <= _ATOM_COUNT_TOLERANCE:
         return {
             "passed": True, "confidence": 1.0,
-            "message": f"count head and confident queries agree at N={n_pred}",
-            "evidence": {"n_pred": int(n_pred), "n_kept": n_kept},
+            "message": (
+                f"count head N={n_pred}, confident queries={n_kept} "
+                f"(diff {diff} <= tol {_ATOM_COUNT_TOLERANCE})"
+            ),
+            "evidence": {
+                "n_pred": int(n_pred),
+                "n_kept": n_kept,
+                "tolerance": _ATOM_COUNT_TOLERANCE,
+            },
         }
     return {
         "passed": False, "confidence": 0.7,
         "message": (
             f"count head says N={n_pred}, but {n_kept} confident queries "
-            "passed the threshold"
+            f"passed the threshold (diff {diff} > tol {_ATOM_COUNT_TOLERANCE})"
         ),
-        "evidence": {"n_pred": int(n_pred), "n_kept": n_kept},
+        "evidence": {
+            "n_pred": int(n_pred),
+            "n_kept": n_kept,
+            "tolerance": _ATOM_COUNT_TOLERANCE,
+        },
     }
 
 
@@ -220,30 +242,6 @@ def _check_permutation_invariance(
     return {
         "passed": True, "confidence": 1.0,
         "message": "permutation invariance holds by construction (g(r) input)",
-        "evidence": {},
-    }
-
-
-@register_check("translation_equivariance")
-def _check_translation_equivariance(
-    bridged: BridgedFMOutput, claim: PhysicalStateClaim,
-) -> dict[str, Any]:
-    """Translation equivariance is approximate for our absolute-positional
-    ViT. The check delegates to the probe's satisfaction score the
-    bridge already attached."""
-    for ac in bridged.applicable_constraints:
-        if ac.constraint_name == "translation_equivariance":
-            score = float(ac.satisfaction_score)
-            ok = ac.satisfied_in_training and score >= 0.50
-            return {
-                "passed": ok,
-                "confidence": score,
-                "message": f"probe-reported equivariance score={score:.2f}",
-                "evidence": {"probe_score": score},
-            }
-    return {
-        "passed": True, "confidence": 0.5,
-        "message": "no translation_equivariance probe attached",
         "evidence": {},
     }
 
@@ -269,26 +267,13 @@ def _check_extensive_scaling(
     }
 
 
-@register_check("equipartition")
-def _check_equipartition(
-    bridged: BridgedFMOutput, claim: PhysicalStateClaim,
-) -> dict[str, Any]:
-    """Equipartition: alpha * beta = T in 2D with unit mass. The check
-    delegates to the probe's satisfaction score the bridge attached."""
-    for ac in bridged.applicable_constraints:
-        if ac.constraint_name == "equipartition":
-            score = float(ac.satisfaction_score)
-            return {
-                "passed": ac.satisfied_in_training,
-                "confidence": score,
-                "message": f"probe-reported equipartition score={score:.2f}",
-                "evidence": {"probe_score": score},
-            }
-    return {
-        "passed": True, "confidence": 0.5,
-        "message": "no equipartition probe attached",
-        "evidence": {},
-    }
+# Note: ``translation_equivariance`` and ``equipartition`` are FM-quality
+# probes whose satisfaction scores live in the bridged output's
+# ``applicable_constraints`` field. The verifier exposes them to other
+# sources (and the LLM context) for trustworthiness weighting, but they
+# do not produce per-output checks here; they describe the FM globally,
+# not a particular prediction. Phase 8's E4 ablation can re-enable them
+# as a separate verifier mode if needed.
 
 
 # ---------------------------------------------------------------------------

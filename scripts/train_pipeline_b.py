@@ -80,6 +80,12 @@ def main(
     literature_db: Path = typer.Option(
         Path("data/literature/clusters.json"), "--literature-db",
     ),
+    # SFT-only
+    include_caveat: bool = typer.Option(
+        False, "--include-caveat",
+        help="SFT only. Include CAVEAT trajectories alongside PASS trajectories. "
+        "Useful when PASS records are sparse.",
+    ),
 ) -> None:
     """Train Pipeline B with SFT, DPO, or GRPO."""
     cfg = load_config(config)
@@ -107,10 +113,22 @@ def main(
     if mode is Mode.sft:
         from fmllm.training.sft_trainer import train_sft
 
-        records = trajectories_to_sft_records(trajs, only_passing=True)
+        records = trajectories_to_sft_records(
+            trajs, only_passing=True, include_caveat=include_caveat,
+        )
         if not records:
-            raise typer.BadParameter("no PASS trajectories found for SFT")
-        typer.echo(f"==> SFT records: {len(records)}")
+            extra = (
+                "" if include_caveat
+                else " (try --include-caveat to also accept CAVEAT trajectories)"
+            )
+            raise typer.BadParameter(
+                f"no qualifying trajectories found for SFT{extra}",
+            )
+        n_pass = sum(1 for r in records if r["passing"])
+        typer.echo(
+            f"==> SFT records: {len(records)} (PASS: {n_pass}, "
+            f"CAVEAT: {len(records) - n_pass})"
+        )
         kwargs = dict(
             base_model_name=base_model,
             sft_records=records,
