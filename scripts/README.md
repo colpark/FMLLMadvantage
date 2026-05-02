@@ -16,6 +16,15 @@ in this directory directly; nothing here imports from another script.
   in parallel across GPUs 0, 1, 2 for one or more training scales.
   Defaults to the full E5 sweep (`train_10k`, `train_30k`,
   `train_50k`). Pass scale names as positional arguments to override.
+- `verify_sweep.sh` - checks the output of `train_fm_sweep.sh`. Per
+  scale: confirms each per-FM log finished, lists checkpoint
+  artifacts on disk, prints probe satisfaction scores side-by-side
+  for at-a-glance comparison across scales. Exits non-zero if any
+  run did not complete.
+- `calibrate_fms.sh` - Stage 3 conformal calibration. Locates the
+  latest `model.pt` under `checkpoints/<fm>/<scale>/<run_id>/` for
+  each (fm, scale) pair and runs `train_fm.py --calibrate-only`.
+  Writes `calibration.json` next to each checkpoint.
 - `save_data_samples.py` - saves an inspectable subset of the
   synthetic dataset. Per specimen: rasterized image PNG, RDF plot,
   initial-position scatter, trajectory overlay, summary YAML. Plus
