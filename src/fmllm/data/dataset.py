@@ -17,6 +17,10 @@ Datasets:
     motif_ids: ``(num_specimens,)`` int16.
     seeds: ``(num_specimens,)`` int64.
 
+The per-item ``specimen_id`` returned by the dataset is the HDF5 row
+index. The per-specimen RNG seed lives in the ``seeds`` HDF5 dataset
+and the reader exposes it under the optional ``seed`` key.
+
 Attributes (root group):
     max_n_atoms, image_size, image_pixel_size_lj, image_blur_radius_lj,
     rdf_bins, rdf_r_max, md_dt, md_steps_per_specimen, motif_names.
@@ -136,7 +140,12 @@ class LJSpecimenDataset(Dataset):
             elif key == "motif_id":
                 out["motif_id"] = int(self._h5["motif_ids"][row])
             elif key == "specimen_id":
-                out["specimen_id"] = int(self._h5["seeds"][row])
+                # The specimen ID is the HDF5 row index. The 'seeds'
+                # dataset stores the per-specimen RNG seed used by the
+                # generator, which is a separate concept exposed below.
+                out["specimen_id"] = int(row)
+            elif key == "seed":
+                out["seed"] = int(self._h5["seeds"][row])
             elif key == "atom_mask":
                 n = int(self._h5["atom_counts"][row])
                 mask = np.zeros(self.max_n_atoms, dtype=bool)

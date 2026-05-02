@@ -69,15 +69,38 @@ class FMRunner(ABC):
 
     def specimen_id_to_index(self, specimen_id: int) -> int:
         """Map a specimen ID (HDF5 row in the original dataset) to the
-        local dataset index. Falls back to assuming identity when the
-        dataset exposes the full HDF5 file."""
+        dataset's local index.
+
+        Fast path covers an unfiltered dataset, where local index
+        equals HDF5 row equals specimen ID. When the dataset is
+        filtered (constructed with ``specimen_ids=...``), the runner
+        builds an ID-to-index map on first use.
+        """
+        # Fast path: unfiltered dataset has _index = arange(N).
+        index_array = getattr(self.dataset, "_index", None)
+        if index_array is not None and len(index_array) > 0:
+            if (
+                int(index_array[0]) == 0
+                and len(index_array) == int(index_array[-1]) + 1
+            ):
+                if specimen_id < 0 or specimen_id >= len(self.dataset):
+                    raise KeyError(
+                        f"specimen_id {specimen_id} out of range "
+                        f"[0, {len(self.dataset)})"
+                    )
+                return int(specimen_id)
+
         if self._id_to_index is None:
             self._id_to_index = {
                 int(self.dataset[i]["specimen_id"]): i  # type: ignore[index]
                 for i in range(len(self.dataset))
             }
         if specimen_id not in self._id_to_index:
-            raise KeyError(f"specimen_id {specimen_id} not in dataset")
+            sample = sorted(self._id_to_index.keys())[:5]
+            raise KeyError(
+                f"specimen_id {specimen_id} not in filtered dataset "
+                f"({len(self.dataset)} specimens; first IDs {sample}...)"
+            )
         return self._id_to_index[specimen_id]
 
     def __call__(self, arguments: dict[str, Any]) -> BridgedFMOutput:

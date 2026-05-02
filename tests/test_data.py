@@ -238,6 +238,29 @@ def test_dataset_reads_synthetic_h5(tmp_path: Path):
         ds.close()
 
 
+def test_specimen_id_is_the_hdf5_row(tmp_path: Path):
+    """The specimen_id key returns the HDF5 row index, not the seed value."""
+    from fmllm.data.dataset import LJSpecimenDataset
+
+    h5_path = tmp_path / "specimens.h5"
+    _build_synthetic_h5(h5_path)
+
+    # _build_synthetic_h5 stores seeds = np.arange(num); replace with offsets
+    # so seed != row to make the distinction visible.
+    with h5py.File(h5_path, "a") as f:
+        f["seeds"][...] = np.arange(4) + 100  # seeds are 100, 101, 102, 103
+
+    ds = LJSpecimenDataset(h5_path, keys=("specimen_id", "seed", "atom_count"))
+    try:
+        # specimen_id == row index; seed is the per-specimen RNG seed.
+        assert ds[0]["specimen_id"] == 0
+        assert ds[0]["seed"] == 100
+        assert ds[2]["specimen_id"] == 2
+        assert ds[2]["seed"] == 102
+    finally:
+        ds.close()
+
+
 def test_dataset_filter_by_specimen_ids(tmp_path: Path):
     from fmllm.data.dataset import LJSpecimenDataset
 
