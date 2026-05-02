@@ -32,6 +32,10 @@ that does not require a GPU.
   literature, cross-FM, simulator, conformal) on hand-crafted
   bridged objects, integrator aggregation rules, E4 ablation
   presets V0/V1/V4, and VerifierVerdict JSON round-trip.
+- `test_orchestrator.py` - LLM action parser, MockLLM scripted
+  responses, OHVD loop termination (commit and budget), tool
+  dispatch, error handling, verdict feedback into chat context,
+  sources_config propagation, and Trajectory JSON round-trip.
 
 ## Running
 

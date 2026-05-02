@@ -37,6 +37,17 @@ in this directory directly; nothing here imports from another script.
   calibration compose into working bridges. CPU-only.
 - `verify_bridges.sh` - bash wrapper for `verify_bridges.py` that
   loops over one or more training scales (defaults to all three).
+- `build_literature_db.py` - regenerates
+  `data/literature/clusters.json` from canonical structures via the
+  project's LJ Hamiltonian. Deterministic. CPU-only.
+- `run_pipeline.py` - Phase 5 end-to-end CLI. Loads each FM model
+  from the latest checkpoint at the requested training scale,
+  builds bridges and the verifier, and runs the OHVD loop on one
+  specimen. Default LLM is Llama 3.1 8B Instruct via
+  `transformers`. Supports `--mock-script` for smoke tests without
+  LLM weights.
+- `mock_scripts/` - hard-coded LLM response sequences for
+  `--mock-script` smoke runs.
 
 Subsequent phases will add:
 - `run_pipeline.py` - end-to-end orchestration loop (Phase 5).
