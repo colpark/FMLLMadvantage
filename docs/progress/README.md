@@ -16,6 +16,7 @@ One markdown document per pipeline phase. Each document records:
 - `03-bridges.md` - Phase 3, structure-preserving and language-anchored bridges.
 - `04-verifier.md` - Phase 4, multi-source verifier with E4 ablation.
 - `05-orchestration.md` - Phase 5, OHVD loop and trajectory storage.
+- `06-rl-finetuning.md` - Phase 6, RL fine-tuning (Pipeline B).
 
-Subsequent phases (Phase 6 through Phase 9) add one progress document
+Subsequent phases (Phase 7 through Phase 9) add one progress document
 each as those phases land.

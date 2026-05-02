@@ -13,5 +13,6 @@ check pass / fail / fixed, and signs off only when every check passes.
 - `03-bridges-audit.md` - Phase 3 audit.
 - `04-verifier-audit.md` - Phase 4 audit.
 - `05-orchestration-audit.md` - Phase 5 audit.
+- `06-rl-finetuning-audit.md` - Phase 6 audit.
 
 Subsequent phases add one audit report each.

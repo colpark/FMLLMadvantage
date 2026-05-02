@@ -59,9 +59,21 @@ in this directory directly; nothing here imports from another script.
   file path.
 - `mock_scripts/` - hard-coded LLM response sequences for
   `--mock-script` smoke runs.
+- `collect_trajectories.py` - Phase 6 trajectory collector. Runs
+  Pipeline A across a range of specimens and writes JSONL plus a
+  summary.
+- `collect_trajectories.sh` - bash wrapper around
+  `collect_trajectories.py`. First arg `--real` switches from the
+  mock LLM to Llama 3.1 8B (or any `LLM_MODEL`). Positional args
+  are start, count, train_split.
+- `train_pipeline_b.py` - Phase 6 unified Pipeline B trainer.
+  `--mode {sft, dpo, grpo}` dispatches to the matching trainer
+  with LoRA adapters.
+- `train_pipeline_b.sh` - bash wrapper that picks the latest
+  `trajectories.jsonl` under `runs/trajectories/` unless
+  `TRAJECTORIES` env overrides.
 
 Subsequent phases will add:
-- `train_pipeline_b.py` - Pipeline B RL fine-tuning (Phase 6).
 - `run_evaluation.py` - the eight world-model tests (Phase 7).
 - `exp_e1_composition_curve.py` - E1 composition sweep (Phase 8).
 - `exp_e2_train_vs_inference.py` - E2 Pipeline A vs B (Phase 8).

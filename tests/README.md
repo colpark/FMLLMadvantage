@@ -36,6 +36,11 @@ that does not require a GPU.
   responses, OHVD loop termination (commit and budget), tool
   dispatch, error handling, verdict feedback into chat context,
   sources_config propagation, and Trajectory JSON round-trip.
+- `test_training.py` - trajectory collection JSONL round-trip,
+  trajectory-to-messages reconstruction, SFT / DPO / GRPO dataset
+  builders, verifier-driven reward function (zero without commit,
+  positive with reasonable claim, zero under V0 ablation), and a
+  LoRA save/load round-trip gated by `pytest.importorskip("peft")`.
 
 ## Running
 

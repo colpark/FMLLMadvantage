@@ -11,7 +11,7 @@ chains of thought.
 
 ## Status
 
-Phase 5 complete. Phase 0 set up the repository, dependency stack, and
+Phase 6 complete. Phase 0 set up the repository, dependency stack, and
 remote bootstrap. Phase 1 added the LJ Hamiltonian, MD integrator,
 synthetic-dataset generator CLI, HDF5 dataset reader, and held-out
 split machinery. Phase 2 implements the three foundation models. The
@@ -19,10 +19,10 @@ Phase 2.5 addendum retrofit elevated constraint extraction to
 first-class status. Phase 3 implements both bridge flavors. Phase 4
 implements the multi-source verifier with the runtime `sources_config`
 slot the E4 ablation experiment requires. Phase 5 implements the
-Observe-Hypothesize-Verify-Decide orchestration loop, the LLM wrapper
-(mock + Llama 3.1 via transformers), the FM runners that load
-trained checkpoints, and `scripts/run_pipeline.py` for end-to-end
-inference on one specimen.
+Observe-Hypothesize-Verify-Decide orchestration loop. Phase 6
+implements Pipeline B RL fine-tuning: trajectory collection, dataset
+extraction (SFT / DPO / GRPO), verifier-driven reward, LoRA adapters,
+and three trainer wrappers around `transformers` and `trl`.
 
 Per-phase notes live under `docs/progress/`.
 

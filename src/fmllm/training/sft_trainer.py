@@ -1,0 +1,120 @@
+"""SFT (supervised fine-tuning) on verifier-passing trajectories.
+
+The simplest Pipeline B variant: behavioral cloning of the LLM's own
+verifier-passing trajectories. Useful as a baseline against GRPO and
+DPO. This trainer applies the chat template to each record's
+``messages`` and minimizes next-token cross-entropy.
+
+Depends on:
+    transformers, datasets, peft (lazy).
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from fmllm.training.lora import apply_lora, save_lora
+
+
+def train_sft(
+    *,
+    base_model_name: str,
+    sft_records: list[dict[str, Any]],
+    output_dir: Path | str,
+    learning_rate: float = 1.0e-4,
+    num_train_epochs: int = 3,
+    per_device_train_batch_size: int = 2,
+    gradient_accumulation_steps: int = 8,
+    warmup_steps: int = 50,
+    max_seq_length: int = 4096,
+    lora_r: int = 16,
+    lora_alpha: int = 32,
+    lora_dropout: float = 0.0,
+    seed: int = 0,
+    bf16: bool = True,
+) -> Path:
+    """Run SFT on the (messages,) records produced by
+    :func:`fmllm.training.dataset.trajectories_to_sft_records`.
+
+    Saves the LoRA adapter to ``output_dir/adapter/``. Returns the
+    output directory.
+
+    Lazy-imports transformers and datasets so this module loads
+    cleanly without those packages installed locally.
+    """
+    import torch  # noqa: PLC0415
+    from datasets import Dataset  # noqa: PLC0415
+    from transformers import (  # noqa: PLC0415
+        AutoModelForCausalLM,
+        AutoTokenizer,
+        DataCollatorForLanguageModeling,
+        Trainer,
+        TrainingArguments,
+    )
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+
+    base_model = AutoModelForCausalLM.from_pretrained(
+        base_model_name,
+        torch_dtype=torch.bfloat16 if bf16 else torch.float32,
+        device_map="auto",
+    )
+    model = apply_lora(
+        base_model,
+        r=lora_r,
+        lora_alpha=lora_alpha,
+        lora_dropout=lora_dropout,
+    )
+
+    def render(record: dict[str, Any]) -> dict[str, list[int]]:
+        rendered = tokenizer.apply_chat_template(
+            record["messages"],
+            tokenize=True,
+            add_generation_prompt=False,
+            return_tensors=None,
+        )
+        if isinstance(rendered, dict):
+            input_ids = rendered["input_ids"]
+        else:
+            input_ids = list(rendered)
+        if len(input_ids) > max_seq_length:
+            input_ids = input_ids[:max_seq_length]
+        return {"input_ids": input_ids}
+
+    ds = Dataset.from_list(sft_records).map(render, remove_columns=["messages"])
+
+    args = TrainingArguments(
+        output_dir=str(output_dir / "trainer"),
+        num_train_epochs=num_train_epochs,
+        per_device_train_batch_size=per_device_train_batch_size,
+        gradient_accumulation_steps=gradient_accumulation_steps,
+        learning_rate=learning_rate,
+        warmup_steps=warmup_steps,
+        bf16=bf16,
+        logging_steps=10,
+        save_strategy="epoch",
+        report_to=[],
+        seed=seed,
+    )
+    collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+
+    trainer = Trainer(
+        model=model,
+        args=args,
+        train_dataset=ds,
+        data_collator=collator,
+    )
+    trainer.train()
+
+    save_lora(model, output_dir / "adapter")
+    tokenizer.save_pretrained(str(output_dir / "adapter"))
+    return output_dir
+
+
+__all__ = ["train_sft"]
