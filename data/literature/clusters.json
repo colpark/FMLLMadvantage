@@ -1,0 +1,98 @@
+[
+  {
+    "diameter_lj": 2.2449240684509277,
+    "motif": "triangular_disk",
+    "n_atoms": 5,
+    "per_atom_potential_energy_lj": -1.4352821350097655,
+    "rdf_first_peak_lj": 1.1299999952316284,
+    "reference": "computed from fmllm.physics with sigma=epsilon=1, r_min = 2**(1/6) \u2248 1.1225"
+  },
+  {
+    "diameter_lj": 1.9096466302871704,
+    "motif": "ring",
+    "n_atoms": 5,
+    "per_atom_potential_energy_lj": -1.1083505630493165,
+    "rdf_first_peak_lj": 1.1299999952316284,
+    "reference": "computed from fmllm.physics with sigma=epsilon=1, r_min = 2**(1/6) \u2248 1.1225"
+  },
+  {
+    "diameter_lj": 2.2449240684509277,
+    "motif": "triangular_disk",
+    "n_atoms": 7,
+    "per_atom_potential_energy_lj": -1.7898902893066406,
+    "rdf_first_peak_lj": 1.1299999952316284,
+    "reference": "computed from fmllm.physics with sigma=epsilon=1, r_min = 2**(1/6) \u2248 1.1225"
+  },
+  {
+    "diameter_lj": 2.5870110988616943,
+    "motif": "ring",
+    "n_atoms": 7,
+    "per_atom_potential_energy_lj": -1.073049681527274,
+    "rdf_first_peak_lj": 1.1299999952316284,
+    "reference": "computed from fmllm.physics with sigma=epsilon=1, r_min = 2**(1/6) \u2248 1.1225"
+  },
+  {
+    "diameter_lj": 3.888322591781616,
+    "motif": "triangular_disk",
+    "n_atoms": 9,
+    "per_atom_potential_energy_lj": -1.8771834903293185,
+    "rdf_first_peak_lj": 1.1299999952316284,
+    "reference": "computed from fmllm.physics with sigma=epsilon=1, r_min = 2**(1/6) \u2248 1.1225"
+  },
+  {
+    "diameter_lj": 3.888322591781616,
+    "motif": "triangular_disk",
+    "n_atoms": 11,
+    "per_atom_potential_energy_lj": -1.9399469549005681,
+    "rdf_first_peak_lj": 1.1299999952316284,
+    "reference": "computed from fmllm.physics with sigma=epsilon=1, r_min = 2**(1/6) \u2248 1.1225"
+  },
+  {
+    "diameter_lj": 3.888322591781616,
+    "motif": "triangular_disk",
+    "n_atoms": 13,
+    "per_atom_potential_energy_lj": -1.9895015129676232,
+    "rdf_first_peak_lj": 1.1299999952316284,
+    "reference": "computed from fmllm.physics with sigma=epsilon=1, r_min = 2**(1/6) \u2248 1.1225"
+  },
+  {
+    "diameter_lj": 4.4898481369018555,
+    "motif": "triangular_disk",
+    "n_atoms": 17,
+    "per_atom_potential_energy_lj": -2.280964122099035,
+    "rdf_first_peak_lj": 1.1299999952316284,
+    "reference": "computed from fmllm.physics with sigma=epsilon=1, r_min = 2**(1/6) \u2248 1.1225"
+  },
+  {
+    "diameter_lj": 4.4898481369018555,
+    "motif": "triangular_disk",
+    "n_atoms": 19,
+    "per_atom_potential_energy_lj": -2.3833437467876233,
+    "rdf_first_peak_lj": 1.1299999952316284,
+    "reference": "computed from fmllm.physics with sigma=epsilon=1, r_min = 2**(1/6) \u2248 1.1225"
+  },
+  {
+    "diameter_lj": 5.939510822296143,
+    "motif": "triangular_disk",
+    "n_atoms": 21,
+    "per_atom_potential_energy_lj": -2.416886465890067,
+    "rdf_first_peak_lj": 1.1299999952316284,
+    "reference": "computed from fmllm.physics with sigma=epsilon=1, r_min = 2**(1/6) \u2248 1.1225"
+  },
+  {
+    "diameter_lj": 5.939510822296143,
+    "motif": "triangular_disk",
+    "n_atoms": 25,
+    "per_atom_potential_energy_lj": -2.47475341796875,
+    "rdf_first_peak_lj": 1.1299999952316284,
+    "reference": "computed from fmllm.physics with sigma=epsilon=1, r_min = 2**(1/6) \u2248 1.1225"
+  },
+  {
+    "diameter_lj": 5.939510822296143,
+    "motif": "triangular_disk",
+    "n_atoms": 30,
+    "per_atom_potential_energy_lj": -2.5102739969889325,
+    "rdf_first_peak_lj": 1.1299999952316284,
+    "reference": "computed from fmllm.physics with sigma=epsilon=1, r_min = 2**(1/6) \u2248 1.1225"
+  }
+]

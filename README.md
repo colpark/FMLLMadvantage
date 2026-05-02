@@ -11,7 +11,7 @@ chains of thought.
 
 ## Status
 
-Phase 3 complete. Phase 0 set up the repository, dependency stack, and
+Phase 4 complete. Phase 0 set up the repository, dependency stack, and
 remote bootstrap. Phase 1 added the LJ Hamiltonian, MD integrator,
 synthetic-dataset generator CLI, HDF5 dataset reader, and held-out
 split machinery. Phase 2 implements the three foundation models (image
@@ -20,11 +20,11 @@ loops and split-conformal calibrators. The Phase 2.5 addendum retrofit
 elevated constraint extraction to first-class status (per-FM metadata,
 behavioral probes, cross-FM tolerance, BridgedFMOutput schema) and
 extended training to three nested data scales for the E5 quality
-sweep. Phase 3 implements both bridge flavors: the structure-
-preserving bridge emits typed `BridgedFMOutput` Pydantic objects, and
-the language-anchored bridge emits parseable natural-language
-captions. Both consume an `FMContext` that loads metadata, probe
-report, and conformal calibration from disk.
+sweep. Phase 3 implements both bridge flavors. Phase 4 implements the
+multi-source verifier with rule-library, literature, cross-FM,
+simulator, and conformal sources, plus the integrator with the
+runtime `sources_config` slot the E4 ablation experiment requires.
+The literature database lives at `data/literature/clusters.json`.
 
 Per-phase notes live under `docs/progress/`.
 

@@ -11,5 +11,6 @@ check pass / fail / fixed, and signs off only when every check passes.
 - `02-fms-audit.md` - Phase 2 audit.
 - `02-fms-retrofit-audit.md` - Phase 2.5 retrofit audit (addendum).
 - `03-bridges-audit.md` - Phase 3 audit.
+- `04-verifier-audit.md` - Phase 4 audit.
 
 Subsequent phases add one audit report each.

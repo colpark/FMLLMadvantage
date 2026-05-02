@@ -28,6 +28,10 @@ that does not require a GPU.
   bridges. Verifies BridgedFMOutput JSON round-trip, per-FM payload
   correctness, calibration fall-back behavior, factory dispatch by
   FM name, and caption parser round-trip.
+- `test_verifier.py` - five verifier sources (rule library,
+  literature, cross-FM, simulator, conformal) on hand-crafted
+  bridged objects, integrator aggregation rules, E4 ablation
+  presets V0/V1/V4, and VerifierVerdict JSON round-trip.
 
 ## Running
 
