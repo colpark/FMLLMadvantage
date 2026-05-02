@@ -30,6 +30,13 @@ in this directory directly; nothing here imports from another script.
   initial-position scatter, trajectory overlay, summary YAML. Plus
   a multi-panel grid of images and RDFs. Stratify by atom count or
   pass explicit `--indices` to pick exact specimens. CPU-only.
+- `verify_bridges.py` - Phase 3 wiring smoke. Loads `FMContext` for
+  the latest run-id under each `checkpoints/<fm>/<scale>/` and
+  emits a synthetic-input bridged output (both flavors) plus a
+  context snapshot per FM. Confirms metadata + probe report +
+  calibration compose into working bridges. CPU-only.
+- `verify_bridges.sh` - bash wrapper for `verify_bridges.py` that
+  loops over one or more training scales (defaults to all three).
 
 Subsequent phases will add:
 - `run_pipeline.py` - end-to-end orchestration loop (Phase 5).
