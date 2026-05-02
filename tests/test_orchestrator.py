@@ -127,6 +127,13 @@ def test_mock_llm_emits_error_when_exhausted():
     assert json.loads(out)["action"] == "error"
 
 
+def test_mock_llm_cycles_when_requested():
+    """cycle=True replays the script indefinitely without exhausting."""
+    mock = MockLLM(["a", "b"], cycle=True)
+    seen = [mock.chat([]) for _ in range(5)]
+    assert seen == ["a", "b", "a", "b", "a"]
+
+
 # ---------------------------------------------------------------------------
 # Loop fixtures
 # ---------------------------------------------------------------------------
@@ -199,6 +206,21 @@ def verifier():
 # ---------------------------------------------------------------------------
 # Loop behavior
 # ---------------------------------------------------------------------------
+
+
+def test_loop_injects_specimen_id_into_call_fm(runners, verifier):
+    """When the LLM action omits specimen_id, the loop fills it in
+    from its own ``run(specimen_id=...)`` value."""
+    mock = MockLLM([
+        '{"action": "call_fm", "tool_name": "fm1"}',
+        '{"action": "commit", "claim": {"n_atoms": 7}}',
+    ])
+    loop = OHVDLoop(llm=mock, verifier=verifier, runners=runners, max_steps=4)
+    traj = loop.run("test", specimen_id=42)
+    obs_steps = [s for s in traj.steps if s.step_type is StepType.OBSERVATION]
+    assert len(obs_steps) == 1
+    prov = obs_steps[0].bridged_output.source.raw_input_provenance
+    assert prov.get("specimen_id") == 42
 
 
 def test_loop_terminates_on_immediate_commit(runners, verifier):

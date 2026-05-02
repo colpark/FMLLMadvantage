@@ -164,6 +164,10 @@ class OHVDLoop:
     ) -> Trajectory:
         run_id = run_id or generate_run_id("pipeline-a")
         started = _now_utc()
+        # Track the current specimen_id so _dispatch_call_fm can fall
+        # back to it when the LLM omits the field. This makes
+        # batch-collection mock scripts work without hard-coding IDs.
+        self._current_specimen_id: int | None = specimen_id
 
         bridged_outputs: list[BridgedFMOutput] = []
         steps: list[Step] = []
@@ -307,8 +311,15 @@ class OHVDLoop:
                 ),
                 None,
             )
+        # Inject the loop's current specimen_id when the LLM action
+        # omits one. This lets generic mock scripts (without hard-
+        # coded IDs) work across many specimens. The LLM can still
+        # override by including specimen_id explicitly.
+        args = dict(action.tool_call.arguments)
+        if "specimen_id" not in args and self._current_specimen_id is not None:
+            args["specimen_id"] = int(self._current_specimen_id)
         try:
-            bridged = runner(action.tool_call.arguments)
+            bridged = runner(args)
         except Exception as exc:  # noqa: BLE001
             return (
                 Step(

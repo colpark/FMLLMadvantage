@@ -135,14 +135,26 @@ class MockLLM(BaseLLM):
     """Deterministic mock LLM that emits scripted responses.
 
     Pass a list of strings (each representing one assistant turn) at
-    construction time. The mock pops them off in order. When the script
-    runs out, the mock returns ``"{\"action\": \"error\", \"error\":
-    \"mock exhausted\"}"`` so the loop terminates cleanly rather than
-    spinning.
+    construction time. Two exhaustion modes:
+
+    - ``cycle=False`` (default): the mock returns each response in
+      order. Once the script runs out, it returns
+      ``{"action": "error", "error": "mock exhausted"}`` so the loop
+      terminates cleanly. Use this for single-specimen smoke tests.
+    - ``cycle=True``: the mock loops the script indefinitely. Each
+      specimen in a batch collection therefore replays the same
+      action sequence from the start.
     """
 
-    def __init__(self, scripted_responses: list[str]) -> None:
+    def __init__(
+        self,
+        scripted_responses: list[str],
+        *,
+        cycle: bool = False,
+    ) -> None:
         self._responses: list[str] = list(scripted_responses)
+        self._cycle: bool = bool(cycle)
+        self._cursor: int = 0
         self.call_count = 0
         self.received_messages: list[list[dict[str, str]]] = []
 
@@ -150,8 +162,16 @@ class MockLLM(BaseLLM):
         self.call_count += 1
         self.received_messages.append([dict(m) for m in messages])
         if not self._responses:
+            return json.dumps({"action": "error", "error": "mock script empty"})
+        if self._cycle:
+            response = self._responses[self._cursor % len(self._responses)]
+            self._cursor += 1
+            return response
+        if self._cursor >= len(self._responses):
             return json.dumps({"action": "error", "error": "mock exhausted"})
-        return self._responses.pop(0)
+        response = self._responses[self._cursor]
+        self._cursor += 1
+        return response
 
 
 class TransformersLLM(BaseLLM):

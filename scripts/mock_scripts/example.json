@@ -1,6 +1,6 @@
 [
-  "{\"action\": \"call_fm\", \"tool_name\": \"fm1\", \"specimen_id\": 42}",
-  "{\"action\": \"call_fm\", \"tool_name\": \"fm2\", \"specimen_id\": 42}",
-  "{\"action\": \"call_fm\", \"tool_name\": \"fm3\", \"specimen_id\": 42}",
+  "{\"action\": \"call_fm\", \"tool_name\": \"fm1\"}",
+  "{\"action\": \"call_fm\", \"tool_name\": \"fm2\"}",
+  "{\"action\": \"call_fm\", \"tool_name\": \"fm3\"}",
   "{\"action\": \"commit\", \"claim\": {\"n_atoms\": 7, \"temperature\": 0.5, \"motif\": \"triangular_disk\"}}"
 ]

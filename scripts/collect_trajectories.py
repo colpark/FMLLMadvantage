@@ -48,13 +48,15 @@ app = typer.Typer(add_completion=False, no_args_is_help=True)
 
 
 def _load_mock(path: Path) -> MockLLM:
+    """Load a mock script. Cycles indefinitely so each specimen in a
+    batch collection replays the script from the start."""
     with path.open("r") as f:
         responses = json.load(f)
     if not isinstance(responses, list) or not all(isinstance(x, str) for x in responses):
         raise typer.BadParameter(
             f"mock script {path} must be a JSON list of strings",
         )
-    return MockLLM(responses)
+    return MockLLM(responses, cycle=True)
 
 
 @app.command()
