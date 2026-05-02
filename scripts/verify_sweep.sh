@@ -109,6 +109,27 @@ PYEOF
 done
 echo
 
+echo "=========================================================="
+echo "  Step 4. Final-epoch val metrics from training logs"
+echo "=========================================================="
+for FM in "${FMS[@]}"; do
+    for SCALE in "${SCALES[@]}"; do
+        LOG="${LOG_DIR}/${FM}-${SCALE}.log"
+        if [ ! -f "${LOG}" ]; then
+            printf '  %-3s @ %-12s : (no log)\n' "${FM}" "${SCALE}"
+            continue
+        fi
+        # Last "val:" line in the log carries the final-epoch metrics.
+        LAST_VAL=$(grep -E '\bval:' "${LOG}" 2>/dev/null | tail -1 | sed -E 's/^.*val:[[:space:]]*/val: /')
+        if [ -z "${LAST_VAL}" ]; then
+            printf '  %-3s @ %-12s : (no val line)\n' "${FM}" "${SCALE}"
+        else
+            printf '  %-3s @ %-12s : %s\n' "${FM}" "${SCALE}" "${LAST_VAL}"
+        fi
+    done
+done
+echo
+
 if [ "${ALL_OK}" -eq 1 ]; then
     echo "=========================================================="
     echo "  Verification: PASS"
