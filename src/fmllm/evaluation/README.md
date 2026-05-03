@@ -55,6 +55,22 @@ distances rarely exceed 5–10 units. For larger benchmarks rebuild
 thresholds against the new distribution before relying on
 pass/fail flags.
 
+### Structural vs full claim distance
+
+`utils.py` exposes two distance functions over `PhysicalStateClaim`:
+
+* `claim_distance(a, b)` — full distance: atom-count + temperature +
+  motif + per-atom energy. Used by the **distinction** tests, where
+  two specimens drawn from different `(N, motif)` classes should
+  differ across every component.
+* `claim_distance_structural(a, b)` — atom-count + motif only. Used
+  by the **compression** tests. Within an `(N, motif)` equivalence
+  class temperature varies legitimately by construction (the
+  testbed spans T ∈ [0.1, 2.0]), so |Ta − Tb| within class measures
+  the dataset's T-spread rather than model stability. Per-atom
+  energy is temperature-coupled and gets dropped for the same
+  reason.
+
 ## Running
 
 ```bash

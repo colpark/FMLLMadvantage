@@ -144,11 +144,13 @@ def claim_distance(
     a: PhysicalStateClaim | None,
     b: PhysicalStateClaim | None,
 ) -> float:
-    """Distance between two typed claims.
+    """Full distance between two typed claims.
 
-    The metric weights atom-count disagreement heavily (the dominant
-    structural fact), temperature on its absolute LJ scale, motif as
-    a 0/1 indicator, and per-atom energy on its LJ scale.
+    Use for distinction-style tests where two distant ``(N, motif)``
+    classes should differ across every claim field. The metric
+    weights atom-count disagreement heavily (the dominant structural
+    fact), temperature on its absolute LJ scale, motif as a 0/1
+    indicator, and per-atom energy on its LJ scale.
     """
     if a is None or b is None:
         return float("inf")
@@ -169,8 +171,41 @@ def claim_distance(
     return d
 
 
+def claim_distance_structural(
+    a: PhysicalStateClaim | None,
+    b: PhysicalStateClaim | None,
+) -> float:
+    """Structural-only distance between two typed claims.
+
+    Use for compression-style tests, where membership in the same
+    physical-equivalence class ``(N, motif)`` does NOT constrain
+    temperature: two specimens with the same atom count and motif
+    can sit at very different Ts in this dataset (T spans roughly
+    [0.1, 2.0] across the testbed). Including |Ta - Tb| in a
+    within-class compression metric measures the dataset's T-spread,
+    not whether the model's structural claim is stable, so the
+    structural variant drops temperature.
+
+    Per-atom energy is also temperature-coupled (kinetic-only
+    contributions vary with T) and gets dropped here for the same
+    reason. Distinction tests still see it via the full
+    :func:`claim_distance`.
+    """
+    if a is None or b is None:
+        return float("inf")
+    d = 0.0
+    if a.n_atoms is not None and b.n_atoms is not None:
+        d += abs(a.n_atoms - b.n_atoms)
+    elif (a.n_atoms is None) != (b.n_atoms is None):
+        d += 5.0
+    if a.motif is not None and b.motif is not None:
+        d += 0.0 if a.motif == b.motif else 1.0
+    return d
+
+
 __all__ = [
     "claim_distance",
+    "claim_distance_structural",
     "edit_distance",
     "extract_final_claim",
     "extract_observations",

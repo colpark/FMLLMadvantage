@@ -2,17 +2,20 @@
 
 Hypothesis: pairs of trajectories converging to equivalent verifier-
 signed states must produce equivalent intermediate-state sequences
-and equivalent final predictions.
+and equivalent final structural predictions.
 
 Operationalization: group trajectories into physical-equivalence
 classes by ``(N, motif)``. Within each class, compute pairwise
-distances between (a) action signatures, and (b) final claims.
-The metric is the median of the within-class median distances.
+distances between (a) action signatures (edit distance), and (b)
+final structural claims via
+:func:`fmllm.evaluation.utils.claim_distance_structural`. The
+structural variant excludes temperature and energy, which vary
+within ``(N, motif)`` by construction in this testbed and otherwise
+swamp the metric.
 
 Lower is better. The pre-registered threshold demands median within-
-class action-signature distance ``<= 2`` (at most a couple of edits)
-and median within-class claim distance ``<= 1.0`` (close in atom
-count, similar T, similar motif).
+class action-signature edit distance ``<= 2`` and median within-
+class structural claim distance ``<= 1.0``.
 
 Depends on:
     fmllm.evaluation.utils, fmllm.evaluation.schema.
@@ -30,7 +33,7 @@ from fmllm.evaluation.schema import (
     threshold_check,
 )
 from fmllm.evaluation.utils import (
-    claim_distance,
+    claim_distance_structural,
     edit_distance,
     physical_equivalence_class,
     trajectory_action_signature,
@@ -90,7 +93,9 @@ def measure(
                         trajectory_action_signature(b),
                     ))
                 )
-                claim_dists.append(claim_distance(a.final_claim, b.final_claim))
+                claim_dists.append(
+                    claim_distance_structural(a.final_claim, b.final_claim)
+                )
                 n_pairs += 1
         if action_dists:
             action_medians.append(statistics.median(action_dists))
@@ -130,8 +135,9 @@ def measure(
         n_samples=n_pairs,
         details={
             "median_within_class_action_distance": median_action,
-            "median_within_class_claim_distance": median_claim,
+            "median_within_class_structural_claim_distance": median_claim,
             "claim_threshold": claim_threshold,
+            "claim_metric": "structural",
             "n_classes_with_pairs": len(action_medians),
             "n_pairs": n_pairs,
             "only_passing": only_passing,

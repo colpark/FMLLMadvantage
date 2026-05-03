@@ -34,6 +34,7 @@ from fmllm.evaluation.schema import (
 )
 from fmllm.evaluation.utils import (
     claim_distance,
+    claim_distance_structural,
     edit_distance,
     physical_equivalence_class,
 )
@@ -220,6 +221,35 @@ def test_claim_distance_matches_intuition():
     assert claim_distance(a, d) == 1
 
 
+def test_claim_distance_structural_drops_temperature_and_energy():
+    a = PhysicalStateClaim(
+        n_atoms=7, temperature=0.5, motif="triangle",
+        per_atom_potential_energy=-1.0,
+    )
+    # Same structure, different temperature and energy: structural=0, full>0.
+    b = PhysicalStateClaim(
+        n_atoms=7, temperature=1.5, motif="triangle",
+        per_atom_potential_energy=-2.0,
+    )
+    assert claim_distance_structural(a, b) == 0
+    assert claim_distance(a, b) > 0
+    # Different motif still counts.
+    c = PhysicalStateClaim(
+        n_atoms=7, temperature=0.5, motif="square",
+        per_atom_potential_energy=-1.0,
+    )
+    assert claim_distance_structural(a, c) == 1
+    # Different N still counts.
+    d = PhysicalStateClaim(
+        n_atoms=20, temperature=0.5, motif="triangle",
+        per_atom_potential_energy=-1.0,
+    )
+    assert claim_distance_structural(a, d) == 13
+    # None inputs propagate to inf, like the full distance.
+    assert claim_distance_structural(None, a) == float("inf")
+    assert claim_distance_structural(a, None) == float("inf")
+
+
 def test_edit_distance_basic():
     assert edit_distance(("a", "b"), ("a", "b")) == 0
     assert edit_distance(("a", "b"), ("a",)) == 1
@@ -257,6 +287,27 @@ def test_trajectory_compression_passes_on_clones():
     assert isinstance(r, TestResult)
     assert r.skipped is False
     assert r.passes is True
+
+
+def test_trajectory_compression_passes_with_t_varying_within_class():
+    """Regression: within-class temperature variance (legitimate by
+    construction) should not break compression. The structural distance
+    drops T."""
+    trajs = []
+    truth = {}
+    for i, t_val in enumerate([0.1, 0.5, 1.0, 1.5, 2.0]):
+        trajs.append(build_trajectory(
+            run_id=f"r{i}", specimen_id=100 + i,
+            actions=["call_fm:fm1_image", "commit"],
+            final_claim=PhysicalStateClaim(
+                n_atoms=7, temperature=t_val, motif="triangle",
+            ),
+        ))
+        truth[100 + i] = {"n": 7, "t": t_val, "motif": "triangle"}
+    r = trajectory_compression.measure(trajectories=trajs, truth=truth)
+    assert r.skipped is False
+    assert r.passes is True
+    assert r.details["claim_metric"] == "structural"
     assert r.metric_value is not None and r.metric_value <= 2.0
 
 
@@ -366,6 +417,28 @@ def test_prediction_compression_clusters_within_class():
     r = prediction_compression.measure(trajectories=trajs, truth=truth)
     assert r.skipped is False
     assert r.passes is True
+
+
+def test_prediction_compression_passes_with_t_varying_within_class():
+    """Regression: each in-class trajectory commits a different (correct)
+    temperature, but they share N and motif. The structural metric must
+    pass even when |dT| within class is large."""
+    trajs = []
+    truth = {}
+    for i, t_val in enumerate([0.1, 0.5, 1.0, 1.5, 2.0]):
+        trajs.append(build_trajectory(
+            run_id=f"r{i}", specimen_id=100 + i,
+            actions=["commit"],
+            final_claim=PhysicalStateClaim(
+                n_atoms=7, temperature=t_val, motif="triangle",
+            ),
+        ))
+        truth[100 + i] = {"n": 7, "t": t_val, "motif": "triangle"}
+    r = prediction_compression.measure(trajectories=trajs, truth=truth)
+    assert r.skipped is False
+    assert r.metric_value == pytest.approx(0.0, abs=1.0e-6)
+    assert r.passes is True
+    assert r.details["claim_metric"] == "structural"
 
 
 def test_prediction_distinction_separates_distant_classes():
