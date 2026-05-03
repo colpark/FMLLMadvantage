@@ -73,21 +73,33 @@ def train_sft(
     )
 
     def render(record: dict[str, Any]) -> dict[str, list[int]]:
-        rendered = tokenizer.apply_chat_template(
+        # Two-step: format as a single string with the chat template,
+        # then tokenize. This is robust across transformers versions
+        # where ``apply_chat_template(tokenize=True)`` may return a
+        # tensor, list, dict, or even a formatted string depending on
+        # the tokenizer's internal handling.
+        text = tokenizer.apply_chat_template(
             record["messages"],
-            tokenize=True,
+            tokenize=False,
             add_generation_prompt=False,
+        )
+        if not isinstance(text, str):
+            text = str(text)
+        encoded = tokenizer(
+            text,
+            truncation=True,
+            max_length=max_seq_length,
+            add_special_tokens=False,
             return_tensors=None,
         )
-        if isinstance(rendered, dict):
-            input_ids = rendered["input_ids"]
-        else:
-            input_ids = list(rendered)
-        if len(input_ids) > max_seq_length:
-            input_ids = input_ids[:max_seq_length]
-        return {"input_ids": input_ids}
+        input_ids = list(encoded["input_ids"])
+        attention_mask = list(encoded.get("attention_mask", [1] * len(input_ids)))
+        return {"input_ids": input_ids, "attention_mask": attention_mask}
 
-    ds = Dataset.from_list(sft_records).map(render, remove_columns=["messages"])
+    ds = Dataset.from_list(sft_records).map(
+        render,
+        remove_columns=list(sft_records[0].keys()),
+    )
 
     args = TrainingArguments(
         output_dir=str(output_dir / "trainer"),
