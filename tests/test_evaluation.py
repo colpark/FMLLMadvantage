@@ -37,7 +37,7 @@ from fmllm.evaluation.utils import (
     edit_distance,
     physical_equivalence_class,
 )
-from fmllm.fms._schemas import BridgedFMOutput, FMSource, Prediction
+from fmllm.fms._schemas import BridgedFMOutput, Prediction, Source
 from fmllm.orchestrator import (
     ActionType,
     LLMAction,
@@ -62,11 +62,11 @@ def _bridged_output(
     fm_name: str, value: dict[str, Any], in_distribution: bool = True,
 ) -> BridgedFMOutput:
     return BridgedFMOutput(
-        source=FMSource(
+        source=Source(
             fm_name=fm_name,
-            checkpoint_path="dummy",
+            fm_version="test",
             in_distribution=in_distribution,
-            ood_score=0.0 if in_distribution else 0.9,
+            raw_input_provenance={},
         ),
         prediction=Prediction(
             quantity=fm_name,
@@ -74,8 +74,9 @@ def _bridged_output(
             units="lj_units",
             uncertainty=None,
         ),
-        derived_values={},
-        probe_reports=[],
+        applicable_constraints=[],
+        dependencies=[],
+        timestamp=_now(),
     )
 
 
@@ -87,7 +88,7 @@ def _verdict(
     return VerifierVerdict(
         aggregate_decision=decision,
         source_verdicts=sources or [],
-        message="",
+        timestamp=_now(),
     )
 
 
