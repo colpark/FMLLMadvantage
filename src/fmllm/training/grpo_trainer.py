@@ -34,9 +34,9 @@ def train_grpo(
     output_dir: Path | str,
     learning_rate: float = 5.0e-6,
     num_train_epochs: int = 1,
-    per_device_train_batch_size: int = 2,
+    per_device_train_batch_size: int = 1,
     num_generations: int = 4,
-    max_prompt_length: int = 2048,
+    max_prompt_length: int = 1024,
     max_completion_length: int = 1024,
     temperature: float = 0.7,
     top_p: float = 0.95,
@@ -46,6 +46,7 @@ def train_grpo(
     lora_dropout: float = 0.0,
     seed: int = 0,
     bf16: bool = True,
+    gradient_checkpointing: bool = True,
 ) -> Path:
     """Run GRPO fine-tuning. Saves the LoRA adapter to
     ``output_dir/adapter/`` and returns ``output_dir``.
@@ -74,6 +75,13 @@ def train_grpo(
         base_model,
         r=lora_r, lora_alpha=lora_alpha, lora_dropout=lora_dropout,
     )
+
+    if gradient_checkpointing:
+        if hasattr(model, "config"):
+            model.config.use_cache = False
+        if hasattr(model, "enable_input_require_grads"):
+            model.enable_input_require_grads()
+        model.gradient_checkpointing_enable()
 
     def render_prompt(record: dict[str, Any]) -> dict[str, str]:
         text = tokenizer.apply_chat_template(
@@ -104,6 +112,10 @@ def train_grpo(
         report_to=[],
         logging_steps=10,
         save_strategy="epoch",
+        gradient_checkpointing=gradient_checkpointing,
+        gradient_checkpointing_kwargs=(
+            {"use_reentrant": False} if gradient_checkpointing else None
+        ),
     )
 
     trainer = GRPOTrainer(

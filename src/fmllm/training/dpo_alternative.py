@@ -37,16 +37,17 @@ def train_dpo(
     output_dir: Path | str,
     learning_rate: float = 5.0e-6,
     num_train_epochs: int = 3,
-    per_device_train_batch_size: int = 2,
-    gradient_accumulation_steps: int = 4,
-    max_prompt_length: int = 2048,
-    max_length: int = 4096,
+    per_device_train_batch_size: int = 1,
+    gradient_accumulation_steps: int = 8,
+    max_prompt_length: int = 1024,
+    max_length: int = 2048,
     beta: float = 0.1,
     lora_r: int = 16,
     lora_alpha: int = 32,
     lora_dropout: float = 0.0,
     seed: int = 0,
     bf16: bool = True,
+    gradient_checkpointing: bool = True,
 ) -> Path:
     """Run DPO fine-tuning on preference pairs. Saves LoRA adapter to
     ``output_dir/adapter/``."""
@@ -70,6 +71,13 @@ def train_dpo(
     model = apply_lora(
         base_model, r=lora_r, lora_alpha=lora_alpha, lora_dropout=lora_dropout,
     )
+
+    if gradient_checkpointing:
+        if hasattr(model, "config"):
+            model.config.use_cache = False
+        if hasattr(model, "enable_input_require_grads"):
+            model.enable_input_require_grads()
+        model.gradient_checkpointing_enable()
 
     def render(record: dict[str, Any]) -> dict[str, str]:
         prompt = tokenizer.apply_chat_template(
@@ -105,6 +113,10 @@ def train_dpo(
         report_to=[],
         logging_steps=10,
         save_strategy="epoch",
+        gradient_checkpointing=gradient_checkpointing,
+        gradient_checkpointing_kwargs=(
+            {"use_reentrant": False} if gradient_checkpointing else None
+        ),
     )
 
     trainer = DPOTrainer(

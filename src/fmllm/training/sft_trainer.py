@@ -24,15 +24,16 @@ def train_sft(
     output_dir: Path | str,
     learning_rate: float = 1.0e-4,
     num_train_epochs: int = 3,
-    per_device_train_batch_size: int = 2,
-    gradient_accumulation_steps: int = 8,
+    per_device_train_batch_size: int = 1,
+    gradient_accumulation_steps: int = 16,
     warmup_steps: int = 50,
-    max_seq_length: int = 4096,
+    max_seq_length: int = 2048,
     lora_r: int = 16,
     lora_alpha: int = 32,
     lora_dropout: float = 0.0,
     seed: int = 0,
     bf16: bool = True,
+    gradient_checkpointing: bool = True,
 ) -> Path:
     """Run SFT on the (messages,) records produced by
     :func:`fmllm.training.dataset.trajectories_to_sft_records`.
@@ -72,6 +73,21 @@ def train_sft(
         lora_dropout=lora_dropout,
     )
 
+    # Gradient checkpointing keeps activation memory bounded by
+    # recomputing during backward. Required for 7B-class models on a
+    # single 80 GB H100 with reasonable sequence lengths.
+    if gradient_checkpointing:
+        # Disable use_cache to silence the deprecation warning + ensure
+        # checkpointing works.
+        if hasattr(model, "config"):
+            model.config.use_cache = False
+        # PEFT-wrapped models need this so input embeddings receive
+        # gradients during the backward pass through checkpointed
+        # blocks.
+        if hasattr(model, "enable_input_require_grads"):
+            model.enable_input_require_grads()
+        model.gradient_checkpointing_enable()
+
     def render(record: dict[str, Any]) -> dict[str, list[int]]:
         # Two-step: format as a single string with the chat template,
         # then tokenize. This is robust across transformers versions
@@ -109,10 +125,14 @@ def train_sft(
         learning_rate=learning_rate,
         warmup_steps=warmup_steps,
         bf16=bf16,
-        logging_steps=10,
+        logging_steps=5,
         save_strategy="epoch",
         report_to=[],
         seed=seed,
+        gradient_checkpointing=gradient_checkpointing,
+        gradient_checkpointing_kwargs={"use_reentrant": False} if gradient_checkpointing else None,
+        # Bound memory growth from peak allocations on Hopper.
+        optim="adamw_torch",
     )
     collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
