@@ -59,15 +59,21 @@ fi
 if [ -n "${EPOCHS:-}" ]; then
     EXTRA+=(--epochs "${EPOCHS}")
 fi
+# SFT-only: pass --include-caveat to widen the training set with
+# CAVEAT trajectories.
+if [ "${INCLUDE_CAVEAT:-0}" -eq 1 ]; then
+    EXTRA+=(--include-caveat)
+fi
 
 echo "==> Pipeline B trainer"
-echo "    Mode           : ${MODE}"
-echo "    Trajectories   : ${TRAJECTORIES}"
-echo "    Output root    : ${OUT_ROOT}"
-echo "    Base model     : ${BASE_MODEL}"
-echo "    LoRA           : r=${LORA_R}, alpha=${LORA_ALPHA}"
-echo "    GPU            : ${GPU}"
-echo "    Accelerate     : ${ACCELERATE}"
+echo "    Mode            : ${MODE}"
+echo "    Trajectories    : ${TRAJECTORIES}"
+echo "    Output root     : ${OUT_ROOT}"
+echo "    Base model      : ${BASE_MODEL}"
+echo "    LoRA            : r=${LORA_R}, alpha=${LORA_ALPHA}"
+echo "    GPU             : ${GPU}"
+echo "    Accelerate      : ${ACCELERATE}"
+echo "    Include CAVEAT  : ${INCLUDE_CAVEAT:-0}"
 echo
 
 if [ "${ACCELERATE}" -eq 1 ]; then
