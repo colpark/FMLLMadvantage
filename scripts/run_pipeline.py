@@ -106,6 +106,11 @@ def main(
         "meta-llama/Llama-3.1-8B-Instruct", "--llm-model",
     ),
     llm_temperature: float = typer.Option(0.2, "--llm-temperature"),
+    adapter_path: Path | None = typer.Option(
+        None, "--adapter-path",
+        help="Optional path to a Pipeline B LoRA adapter. When set, "
+        "loads the base LLM then stacks the adapter on top.",
+    ),
     device: str = typer.Option("auto", "--device"),
     mock_script: Path | None = typer.Option(
         None, "--mock-script",
@@ -149,7 +154,10 @@ def main(
             model_name=llm_model,
             device=device,
             temperature=llm_temperature,
+            adapter_path=str(adapter_path) if adapter_path is not None else None,
         )
+        if adapter_path is not None:
+            typer.echo(f"==> Pipeline B: stacking LoRA adapter from {adapter_path}")
 
     # Build loop.
     loop = OHVDLoop(

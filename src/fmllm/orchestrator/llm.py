@@ -191,6 +191,10 @@ class TransformersLLM(BaseLLM):
             decoding.
         dtype: Optional override; defaults to ``torch.bfloat16`` on
             CUDA, ``torch.float32`` on CPU.
+        adapter_path: Optional path to a PEFT LoRA adapter. When set,
+            the wrapper loads the base model first, then applies the
+            adapter on top. This is how Pipeline B's fine-tuned LLM
+            gets loaded at inference time.
     """
 
     def __init__(
@@ -201,12 +205,14 @@ class TransformersLLM(BaseLLM):
         max_new_tokens: int = 512,
         temperature: float = 0.2,
         dtype: Any = None,
+        adapter_path: str | None = None,
     ) -> None:
         self.model_name = model_name
         self.device = device
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.dtype = dtype
+        self.adapter_path = adapter_path
         self._model = None
         self._tokenizer = None
 
@@ -231,6 +237,15 @@ class TransformersLLM(BaseLLM):
             torch_dtype=dtype,
             device_map=device_map,
         )
+        # Stack a LoRA adapter on top of the base model when one is
+        # supplied. This is how Pipeline B's fine-tuned LLM gets
+        # loaded at inference time.
+        if self.adapter_path is not None:
+            from peft import PeftModel  # noqa: PLC0415
+
+            model = PeftModel.from_pretrained(
+                model, self.adapter_path, is_trainable=False,
+            )
         model.eval()
         self._tokenizer = tokenizer
         self._model = model

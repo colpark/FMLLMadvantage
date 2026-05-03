@@ -48,10 +48,16 @@ STEP_BUDGET="${STEP_BUDGET:-16}"
 ABLATION="${ABLATION:-V4}"
 GPU="${GPU:-0}"
 
+EXTRA=()
+if [ -n "${ADAPTER_PATH:-}" ]; then
+    EXTRA+=(--adapter-path "${ADAPTER_PATH}")
+fi
+
 echo "==> Pipeline A (real LLM)"
 echo "    Specimen ID    : ${SPECIMEN_ID}"
 echo "    Train split    : ${TRAIN_SPLIT}"
 echo "    LLM model      : ${LLM_MODEL}"
+echo "    Adapter path   : ${ADAPTER_PATH:-(none, base model only)}"
 echo "    Temperature    : ${LLM_TEMPERATURE}"
 echo "    Step budget    : ${STEP_BUDGET}"
 echo "    Ablation       : ${ABLATION}"
@@ -69,7 +75,8 @@ CUDA_VISIBLE_DEVICES="${GPU}" uv run python scripts/run_pipeline.py \
     --llm-model "${LLM_MODEL}" \
     --llm-temperature "${LLM_TEMPERATURE}" \
     --step-budget "${STEP_BUDGET}" \
-    --ablation "${ABLATION}"
+    --ablation "${ABLATION}" \
+    "${EXTRA[@]}"
 
 LATEST=$(ls -td runs/*pipeline-a-${SPECIMEN_ID}* 2>/dev/null | head -1 || true)
 if [ -n "${LATEST}" ]; then

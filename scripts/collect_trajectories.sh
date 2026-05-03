@@ -70,6 +70,10 @@ echo
 EXTRA=()
 if [ "${USE_REAL}" -eq 1 ]; then
     EXTRA+=(--llm-model "${LLM_MODEL}")
+    if [ -n "${ADAPTER_PATH:-}" ]; then
+        EXTRA+=(--adapter-path "${ADAPTER_PATH}")
+        echo "    Adapter path   : ${ADAPTER_PATH}"
+    fi
 else
     EXTRA+=(--mock-script "${MOCK_SCRIPT}")
 fi
