@@ -125,6 +125,18 @@ def main(
     adapter_path: Path | None = typer.Option(None, "--adapter-path"),
     device: str = typer.Option("auto", "--device"),
     mock_script: Path | None = typer.Option(None, "--mock-script"),
+    specimen_ids_file: Path | None = typer.Option(
+        None, "--specimen-ids-file",
+        help="Optional JSON file with a list of specimen IDs to run, "
+             "overriding --start/--count. Used by the held-out protocol.",
+    ),
+    literature_compare_energy: bool = typer.Option(
+        False, "--literature-compare-energy/--no-literature-compare-energy",
+        help="When true, the literature source raises CAVEAT on FM2-vs-"
+             "ground-state energy mismatches. Default false because the "
+             "DB references are ground-state and the data is finite-T. "
+             "Only meaningful for --baseline full.",
+    ),
 ) -> None:
     """Run one Phase 8a baseline."""
     if baseline not in {"naked", "no_verifier", "full"}:
@@ -132,7 +144,24 @@ def main(
             f"--baseline must be one of naked, no_verifier, full; got {baseline!r}"
         )
 
-    run_id = generate_run_id(f"baseline-{baseline}-{count}")
+    # Resolve the specimen ID list: explicit file overrides start/count.
+    if specimen_ids_file is not None:
+        if not specimen_ids_file.exists():
+            raise typer.BadParameter(
+                f"--specimen-ids-file not found: {specimen_ids_file}"
+            )
+        with specimen_ids_file.open("r") as f:
+            specimen_ids = list(json.load(f))
+        if not all(isinstance(x, int) for x in specimen_ids):
+            raise typer.BadParameter(
+                f"{specimen_ids_file} must contain a JSON list of ints"
+            )
+        run_id_slug = f"baseline-{baseline}-{len(specimen_ids)}-holdout"
+    else:
+        specimen_ids = list(range(start, start + count))
+        run_id_slug = f"baseline-{baseline}-{count}"
+
+    run_id = generate_run_id(run_id_slug)
     out_dir = out / baseline / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
     configure_logging(out_dir)
@@ -140,7 +169,15 @@ def main(
     typer.echo(f"==> Baseline: {baseline}")
     typer.echo(f"==> Run id  : {run_id}")
     typer.echo(f"==> Output  : {out_dir}")
-    typer.echo(f"==> Specimens: [{start}, {start + count})")
+    if specimen_ids_file is not None:
+        typer.echo(
+            f"==> Specimens: from {specimen_ids_file} "
+            f"({len(specimen_ids)} IDs, first 3: {specimen_ids[:3]})"
+        )
+    else:
+        typer.echo(f"==> Specimens: [{start}, {start + count})")
+    if baseline == "full" and literature_compare_energy:
+        typer.echo("==> Literature source: compare_energy=True (strict mode)")
 
     llm = _build_llm(
         mock_script=mock_script,
@@ -160,7 +197,7 @@ def main(
             "llm_error": 0,
         }
         with jsonl_path.open("w") as f:
-            for sid in range(start, start + count):
+            for sid in specimen_ids:
                 traj = run_naked_baseline(
                     llm=llm,
                     query=query,
@@ -182,6 +219,10 @@ def main(
                 "baseline": "naked",
                 "start": start,
                 "count": count,
+                "specimen_ids_file": (
+                    str(specimen_ids_file) if specimen_ids_file is not None else None
+                ),
+                "n_specimens": len(specimen_ids),
             },
             config={
                 "run_id": run_id,
@@ -210,13 +251,16 @@ def main(
     if baseline == "no_verifier":
         verifier = NoOpVerifier()
     else:
-        verifier = build_default_verifier(literature_db_path=literature_db)
+        verifier = build_default_verifier(
+            literature_db_path=literature_db,
+            literature_compare_energy=literature_compare_energy,
+        )
 
     summary = collect_trajectories(
         llm=llm,
         verifier=verifier,
         runners=runners,
-        specimen_ids=range(start, start + count),
+        specimen_ids=specimen_ids,
         out_dir=out_dir,
         query=query,
         max_steps=max_steps,
@@ -231,10 +275,17 @@ def main(
             "baseline": baseline,
             "start": start,
             "count": count,
+            "specimen_ids_file": (
+                str(specimen_ids_file) if specimen_ids_file is not None else None
+            ),
+            "n_specimens": len(specimen_ids),
             "h5_path": str(h5_path),
             "checkpoint_root": str(checkpoint_root),
             "train_split": train_split,
             "literature_db": str(literature_db) if baseline == "full" else None,
+            "literature_compare_energy": (
+                literature_compare_energy if baseline == "full" else None
+            ),
         },
         config={
             "run_id": run_id,

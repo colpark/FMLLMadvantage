@@ -53,6 +53,12 @@ fi
 if [ -n "${ADAPTER_PATH:-}" ]; then
     EXTRA+=(--adapter-path "${ADAPTER_PATH}")
 fi
+if [ -n "${SPECIMEN_IDS_FILE:-}" ]; then
+    EXTRA+=(--specimen-ids-file "${SPECIMEN_IDS_FILE}")
+fi
+if [ "${LITERATURE_COMPARE_ENERGY:-0}" -eq 1 ]; then
+    EXTRA+=(--literature-compare-energy)
+fi
 
 echo "==> Baseline runner"
 echo "    Baseline   : ${BASELINE}"
