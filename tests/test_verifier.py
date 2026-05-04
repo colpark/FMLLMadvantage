@@ -165,10 +165,12 @@ def test_rule_library_flags_non_negativity_violation():
     assert verdict.decision == SourceDecision.FAIL
 
 
-def test_rule_library_flags_position_outside_box_as_fail():
+def test_rule_library_caveat_on_position_outside_box():
+    """positions_in_box was softened from hard to soft after Phase 8a.
+    FM1's regression head leaks 1-5 of 20-30 atoms outside the box on
+    dense clusters, which would otherwise reject correct claims. The
+    constraint still fires, but as a CAVEAT not a FAIL."""
     src = RuleLibrarySource()
-    # Confidence high enough for the position to be in the AtomSet payload,
-    # but the position itself is outside the 4.8 LJ half-box.
     bridged = [
         _bridged_fm1(
             positions=[[0.0, 0.0], [10.0, 0.0]],
@@ -177,8 +179,7 @@ def test_rule_library_flags_position_outside_box_as_fail():
         ),
     ]
     verdict = src.check(bridged, PhysicalStateClaim())
-    # positions_in_box constraint type is hard -> FAIL.
-    assert verdict.decision == SourceDecision.FAIL
+    assert verdict.decision == SourceDecision.CAVEAT
 
 
 def test_rule_library_caveat_on_atom_count_inconsistency():

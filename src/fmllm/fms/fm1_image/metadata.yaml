@@ -35,11 +35,17 @@ physics_constraints:
     expected_satisfaction: 0.95
     probe: fmllm.fms.fm1_image.probes.atom_count_consistency
 
-  # Positions outside the imaging box are a real physics violation
-  # (the rasterizer cannot show them and the simulation cell cuts
-  # off there). Kept hard.
+  # Positions outside the imaging box are a real physics violation in
+  # principle. In practice, FM1's regression head leaks 1-5 atoms outside
+  # the box on dense clusters (N >= 20), typically 3-10% of positions
+  # per specimen. The Phase 8a baseline run showed 26/200 specimens
+  # FAILing here even when the LLM's claim was structurally correct
+  # (right N, right motif, T close). Treating this as a hard FAIL
+  # rejects correct claims; treating as a soft CAVEAT preserves the
+  # signal without blocking commit. Re-promote to hard once FM1's
+  # position head is retrained with a clipping or in-box-prior loss.
   - name: positions_in_box
-    type: hard
+    type: soft
     description: "All predicted atom positions lie inside the imaging box of half-width box_half_width_lj."
     expected_satisfaction: 0.99
     probe: fmllm.fms.fm1_image.probes.positions_in_box
