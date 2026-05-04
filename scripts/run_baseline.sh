@@ -17,7 +17,9 @@
 #   COUNT         (default: 200)
 #   H5_PATH       (default: data/synthetic_lj_v1/specimens.h5)
 #   OUT_ROOT      (default: runs/baselines)
-#   LLM_MODEL     (default: meta-llama/Llama-3.1-8B-Instruct)
+#   LLM_MODEL     (default: Qwen/Qwen2.5-7B-Instruct; open-weights model
+#                  consistent with Pipeline B SFT. Set to a Llama variant
+#                  only if your HF account has access to that gated repo.)
 #   LLM_TEMP      (default: 0.4)
 #   GPU           (default: 0)
 #   MOCK_SCRIPT   (default: unset; pass to use a JSON-list mock LLM)
@@ -40,7 +42,7 @@ START="${START:-0}"
 COUNT="${COUNT:-200}"
 H5_PATH="${H5_PATH:-data/synthetic_lj_v1/specimens.h5}"
 OUT_ROOT="${OUT_ROOT:-runs/baselines}"
-LLM_MODEL="${LLM_MODEL:-meta-llama/Llama-3.1-8B-Instruct}"
+LLM_MODEL="${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
 LLM_TEMP="${LLM_TEMP:-0.4}"
 GPU="${GPU:-0}"
 
