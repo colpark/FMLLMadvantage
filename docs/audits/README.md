@@ -15,5 +15,6 @@ check pass / fail / fixed, and signs off only when every check passes.
 - `05-orchestration-audit.md` - Phase 5 audit.
 - `06-rl-finetuning-audit.md` - Phase 6 audit.
 - `07-evaluation-audit.md` - Phase 7 audit.
+- `08-baselines-audit.md` - Phase 8a audit.
 
 Subsequent phases add one audit report each.

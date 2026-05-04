@@ -18,6 +18,7 @@ One markdown document per pipeline phase. Each document records:
 - `05-orchestration.md` - Phase 5, OHVD loop and trajectory storage.
 - `06-rl-finetuning.md` - Phase 6, RL fine-tuning (Pipeline B).
 - `07-evaluation.md` - Phase 7, eight world-model evaluation tests.
+- `08-baselines.md` - Phase 8a, baseline comparison (B0 + B2 + B3) and goal-accuracy metric.
 
-Subsequent phases (Phase 8 and Phase 9) add one progress document
+Subsequent phases (Phase 8b and Phase 9) add one progress document
 each as those phases land.

@@ -18,6 +18,7 @@ Layers:
 """
 
 from fmllm.evaluation import (
+    accuracy,
     calibrated_uncertainty,
     federated_factorability,
     goal_competence,
@@ -37,6 +38,7 @@ from fmllm.evaluation.schema import (
 __all__ = [
     "EvaluationReport",
     "TestResult",
+    "accuracy",
     "calibrated_uncertainty",
     "federated_factorability",
     "goal_competence",

@@ -38,13 +38,15 @@ class TestResult(_StrictModel):
 
 
 class EvaluationReport(_StrictModel):
-    """Aggregate of all eight test results."""
+    """Aggregate of the eight world-model tests plus optional
+    ground-truth accuracy."""
 
     run_id: str
     timestamp_utc: str
     trajectory_results: list[TestResult] = Field(default_factory=list)
     prediction_results: list[TestResult] = Field(default_factory=list)
     cross_layer_results: list[TestResult] = Field(default_factory=list)
+    accuracy_results: list[TestResult] = Field(default_factory=list)
     aggregate_pass: bool = False
     inputs: dict[str, Any] = Field(default_factory=dict)
 

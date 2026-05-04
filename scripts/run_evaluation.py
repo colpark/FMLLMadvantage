@@ -48,6 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from fmllm.evaluation import (  # noqa: E402
     EvaluationReport,
+    accuracy,
     calibrated_uncertainty,
     federated_factorability,
     goal_competence,
@@ -91,7 +92,7 @@ def _run_all_tests(
     trajectories: list[Trajectory],
     truth: dict[int, dict[str, Any]],
     trajectories_by_ablation: dict[str, list[Trajectory]] | None,
-) -> tuple[list, list, list]:
+) -> tuple[list, list, list, list]:
     traj_results = [
         trajectory_compression.measure(trajectories=trajectories, truth=truth),
         trajectory_distinction.measure(trajectories=trajectories, truth=truth),
@@ -124,7 +125,10 @@ def _run_all_tests(
     cross_results.append(
         calibrated_uncertainty.measure(trajectories=trajectories),
     )
-    return traj_results, pred_results, cross_results
+    accuracy_results = [
+        accuracy.measure(trajectories=trajectories, truth=truth),
+    ]
+    return traj_results, pred_results, cross_results, accuracy_results
 
 
 @app.command()
@@ -187,13 +191,13 @@ def main(
     typer.echo(f"==> Run id: {run_id}")
     typer.echo(f"==> Output : {run_dir}")
 
-    traj_results, pred_results, cross_results = _run_all_tests(
+    traj_results, pred_results, cross_results, accuracy_results = _run_all_tests(
         trajectories=all_trajectories,
         truth=truth,
         trajectories_by_ablation=trajectories_by_ablation,
     )
 
-    all_results = traj_results + pred_results + cross_results
+    all_results = traj_results + pred_results + cross_results + accuracy_results
     n_pass = sum(1 for r in all_results if r.passes and not r.skipped)
     n_skip = sum(1 for r in all_results if r.skipped)
     n_fail = sum(1 for r in all_results if not r.passes and not r.skipped)
@@ -205,6 +209,7 @@ def main(
         trajectory_results=traj_results,
         prediction_results=pred_results,
         cross_layer_results=cross_results,
+        accuracy_results=accuracy_results,
         aggregate_pass=aggregate_pass,
         inputs={
             "h5_path": str(h5_path),
