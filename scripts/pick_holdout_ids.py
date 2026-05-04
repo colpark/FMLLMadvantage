@@ -59,39 +59,75 @@ def main(
     splits = _load_yaml(splits_path)
 
     sel = lock.get("selection") or {}
-    if sel.get("source") != "splits.holdout":
+    source = sel.get("source")
+    count = int(sel.get("count", 200))
+
+    chosen: list[int] = []
+    chosen_provenance: list[dict] = []
+
+    if source == "splits.holdout":
+        cell = sel.get("cell", "in_distribution")
+        fallback_cells = list(sel.get("fallback_cells") or [])
+
+        holdout = splits.get("holdout") or {}
+        if not isinstance(holdout, dict):
+            typer.echo("ERROR: splits.yaml `holdout` is not a dict of cells")
+            raise typer.Exit(code=1)
+
+        cells_in_order = [cell] + fallback_cells
+        for c in cells_in_order:
+            ids = sorted(int(x) for x in (holdout.get(c) or []))
+            for sid in ids:
+                if len(chosen) >= count:
+                    break
+                chosen.append(sid)
+                chosen_provenance.append({"specimen_id": sid, "cell": c})
+            if len(chosen) >= count:
+                break
+
+        if not chosen:
+            cell_sizes = {
+                k: len(v) for k, v in holdout.items() if isinstance(v, list)
+            }
+            typer.echo("")
+            typer.echo("ERROR: splits.yaml's holdout partition is empty.")
+            typer.echo(f"  splits.yaml keys      : {sorted(splits.keys())}")
+            typer.echo(f"  holdout cell sizes    : {cell_sizes}")
+            typer.echo(f"  meta.num_holdout      : "
+                       f"{(splits.get('meta') or {}).get('num_holdout')}")
+            typer.echo("")
+            typer.echo(
+                "Switch configs/holdout_lock.yaml to a contiguous range. "
+                "Example:"
+            )
+            typer.echo("")
+            typer.echo("  selection:")
+            typer.echo("    source: contiguous_range")
+            typer.echo("    start: 40000")
+            typer.echo("    count: 200")
+            typer.echo("")
+            typer.echo(
+                "Pick a range disjoint from the dev set [0, 200) and "
+                "from any prior baseline collection."
+            )
+            raise typer.Exit(code=1)
+
+    elif source == "contiguous_range":
+        rng_start = int(sel.get("start", 0))
+        for sid in range(rng_start, rng_start + count):
+            chosen.append(sid)
+            chosen_provenance.append({"specimen_id": sid, "cell": "contiguous"})
+
+    else:
         typer.echo(
-            f"ERROR: unsupported selection.source {sel.get('source')!r}; "
-            f"expected splits.holdout"
+            f"ERROR: unsupported selection.source {source!r}; "
+            "expected splits.holdout or contiguous_range"
         )
         raise typer.Exit(code=1)
 
-    cell = sel.get("cell", "in_distribution")
-    count = int(sel.get("count", 200))
-    fallback_cells = list(sel.get("fallback_cells") or [])
-
-    holdout = splits.get("holdout") or {}
-    if not isinstance(holdout, dict):
-        typer.echo("ERROR: splits.yaml `holdout` is not a dict of cells")
-        raise typer.Exit(code=1)
-
-    cells_in_order = [cell] + fallback_cells
-    chosen: list[int] = []
-    chosen_provenance: list[dict] = []
-    for c in cells_in_order:
-        ids = sorted(int(x) for x in (holdout.get(c) or []))
-        for sid in ids:
-            if len(chosen) >= count:
-                break
-            chosen.append(sid)
-            chosen_provenance.append({"specimen_id": sid, "cell": c})
-        if len(chosen) >= count:
-            break
-
     if len(chosen) < count:
         typer.echo(
-            f"WARNING: requested {count} specimens, only {len(chosen)} "
-            f"available across cells {cells_in_order}"
+            f"WARNING: requested {count} specimens, only {len(chosen)} resolved"
         )
 
     # Defensive check: do not include any dev-set ID.

@@ -23,9 +23,14 @@ This document describes the audit-grade evaluation protocol introduced after the
 Two senses of held out apply:
 
 1. **Held out from the orchestrator.** The Phase 8a dev set was specimens [0, 200). The held-out specimens have never been collected by Pipeline A. This is the primary definition; what we want to know is how the LLM + verifier behave on unseen specimens.
-2. **Held out from FM training.** The dataset's `splits.yaml` carries an explicit `holdout` partition that is excluded from the train splits used to train the FMs. The lock pulls from that partition by default, so the held-out specimens are also fresh to the FMs.
+2. **Held out from FM training.** The dataset's `splits.yaml` carries an explicit `holdout` partition that is excluded from the FM train splits.
 
-If you only want sense (1) and the testbed is small enough that the FM-holdout partition is empty, edit `configs/holdout_lock.yaml` to point at any range disjoint from `[0, 200)` and from the dev set.
+The current `configs/holdout_lock.yaml` (version 2) uses sense (1) only. The current testbed was generated with `num_holdout=0`, so every specimen is in the FM training pool. Until the testbed is regenerated, the held-out claim is narrower: these specimens are fresh to the orchestrator and verifier, but the FMs have seen them as supervised examples during training.
+
+The picker supports two selection sources via `selection.source`:
+
+* `contiguous_range`: picks `[start, start + count)`. Used by version 2 of the lock.
+* `splits.holdout`: pulls from `splits.yaml`'s holdout cells. Use after regenerating the testbed with `num_holdout > 0`.
 
 ## Commands to run
 
