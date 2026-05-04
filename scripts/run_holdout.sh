@@ -14,13 +14,18 @@
 #   5. Evaluate every configuration and write a comparison.
 #
 # Usage:
-#   bash scripts/run_holdout.sh
-#   bash scripts/run_holdout.sh --skip-strict   # omit the strict-literature run
+#   bash scripts/run_holdout.sh                      # full protocol from scratch
+#   bash scripts/run_holdout.sh --skip-strict        # omit the strict-literature run
+#   SKIP_EXISTING=1 bash scripts/run_holdout.sh      # reuse any existing trajectories
 #
 # Environment variables (optional):
-#   GPU       (default: 0)
-#   LLM_MODEL (default: Qwen/Qwen2.5-7B-Instruct)
-#   LLM_TEMP  (default: 0.4)
+#   GPU            (default: 0)
+#   LLM_MODEL      (default: Qwen/Qwen2.5-7B-Instruct)
+#   LLM_TEMP       (default: 0.4)
+#   SKIP_EXISTING  (default: 0; set to 1 to skip any baseline that already has
+#                   a trajectories.jsonl under runs/holdout/<baseline>/ or
+#                   runs/holdout-strict/full/. Re-evaluates against the
+#                   existing trajectories instead of re-collecting.)
 
 set -euo pipefail
 
@@ -38,13 +43,15 @@ done
 GPU="${GPU:-0}"
 LLM_MODEL="${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
 LLM_TEMP="${LLM_TEMP:-0.4}"
+SKIP_EXISTING="${SKIP_EXISTING:-0}"
 
 echo "==============================================================="
 echo "Held-out evaluation protocol"
 echo "==============================================================="
-echo "GPU       : ${GPU}"
-echo "LLM       : ${LLM_MODEL} (T=${LLM_TEMP})"
-echo "Skip strict-literature run: ${SKIP_STRICT}"
+echo "GPU            : ${GPU}"
+echo "LLM            : ${LLM_MODEL} (T=${LLM_TEMP})"
+echo "Skip strict    : ${SKIP_STRICT}"
+echo "Skip existing  : ${SKIP_EXISTING}"
 echo
 
 # 1. Verify thresholds.
@@ -71,6 +78,16 @@ for baseline in naked no_verifier full; do
     echo "==============================================================="
     echo "==> Step 3.${baseline}: held-out baseline ${baseline}"
     echo "==============================================================="
+
+    if [ "${SKIP_EXISTING}" -eq 1 ]; then
+        EXISTING=$(ls -td "runs/holdout/${baseline}"/*/trajectories.jsonl 2>/dev/null | head -1 || true)
+        if [ -n "${EXISTING}" ]; then
+            echo "==> reusing existing trajectories: ${EXISTING}"
+            echo
+            continue
+        fi
+    fi
+
     SPECIMEN_IDS_FILE="${IDS_FILE}" \
         OUT_ROOT="runs/holdout" \
         GPU="${GPU}" \
@@ -85,14 +102,27 @@ if [ "${SKIP_STRICT}" -eq 0 ]; then
     echo "==============================================================="
     echo "==> Step 4: held-out full + literature_compare_energy=True"
     echo "==============================================================="
-    SPECIMEN_IDS_FILE="${IDS_FILE}" \
-        OUT_ROOT="runs/holdout-strict" \
-        LITERATURE_COMPARE_ENERGY=1 \
-        GPU="${GPU}" \
-        LLM_MODEL="${LLM_MODEL}" \
-        LLM_TEMP="${LLM_TEMP}" \
-        bash scripts/run_baseline.sh full
-    echo
+
+    SKIP_THIS=0
+    if [ "${SKIP_EXISTING}" -eq 1 ]; then
+        EXISTING=$(ls -td runs/holdout-strict/full/*/trajectories.jsonl 2>/dev/null | head -1 || true)
+        if [ -n "${EXISTING}" ]; then
+            echo "==> reusing existing trajectories: ${EXISTING}"
+            echo
+            SKIP_THIS=1
+        fi
+    fi
+
+    if [ "${SKIP_THIS}" -eq 0 ]; then
+        SPECIMEN_IDS_FILE="${IDS_FILE}" \
+            OUT_ROOT="runs/holdout-strict" \
+            LITERATURE_COMPARE_ENERGY=1 \
+            GPU="${GPU}" \
+            LLM_MODEL="${LLM_MODEL}" \
+            LLM_TEMP="${LLM_TEMP}" \
+            bash scripts/run_baseline.sh full
+        echo
+    fi
 fi
 
 eval_one() {
