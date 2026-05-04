@@ -351,11 +351,44 @@ def test_trajectory_distinction_separates_classes():
         truth[100 + i] = {"n": 7, "t": 0.5, "motif": "triangle"}
         truth[200 + i] = {"n": 20, "t": 0.5, "motif": "square"}
     r = trajectory_distinction.measure(
-        trajectories=trajs, truth=truth, n_pairs=20,
+        trajectories=trajs, truth=truth, n_pairs=20, threshold=2.0,
     )
     assert r.skipped is False
     assert r.metric_value is not None
-    assert r.metric_value > 0
+    # claim distance is |20-7| + 1 (motif) = 14, way above the 2.0 threshold.
+    assert r.metric_value >= 2.0
+    assert r.passes is True
+
+
+def test_trajectory_distinction_passes_on_consistent_protocol():
+    """Regression: a system that takes the same evidence-gathering
+    actions on every specimen but commits class-appropriate claims
+    should still PASS distinction. Action distance = 0 across classes
+    must not gate the test."""
+    a_claim = PhysicalStateClaim(n_atoms=7, motif="triangle")
+    b_claim = PhysicalStateClaim(n_atoms=20, motif="square")
+    trajs = []
+    truth: dict[int, dict[str, Any]] = {}
+    for i in range(3):
+        trajs.append(build_trajectory(
+            run_id=f"a{i}", specimen_id=100 + i,
+            actions=["call_fm:fm1_image", "call_fm:fm2_rdf", "call_fm:fm3_traj", "commit"],
+            final_claim=a_claim,
+        ))
+        trajs.append(build_trajectory(
+            run_id=f"b{i}", specimen_id=200 + i,
+            actions=["call_fm:fm1_image", "call_fm:fm2_rdf", "call_fm:fm3_traj", "commit"],
+            final_claim=b_claim,
+        ))
+        truth[100 + i] = {"n": 7, "t": 0.5, "motif": "triangle"}
+        truth[200 + i] = {"n": 20, "t": 0.5, "motif": "square"}
+    r = trajectory_distinction.measure(
+        trajectories=trajs, truth=truth, n_pairs=20, threshold=2.0,
+    )
+    assert r.skipped is False
+    assert r.passes is True
+    assert r.details["median_across_class_action_distance"] == 0.0
+    assert r.details["median_across_class_claim_distance"] >= 2.0
 
 
 def test_step_recoverability_passes_when_claim_matches_fm_signals():

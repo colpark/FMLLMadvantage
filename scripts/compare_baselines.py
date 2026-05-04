@@ -163,12 +163,59 @@ def main(
     typer.echo("-" * line_w)
 
     # Headline accuracy line: compound goal accuracy per baseline.
-    headline = ["accuracy"]
+    headline = []
     for key, _, _ in parsed:
         r = by_baseline[key].get("goal_accuracy")
         v = "n/a" if r is None or r.get("metric_value") is None else f"{r['metric_value']:.3f}"
         headline.append(f"{key}={v}")
-    typer.echo("HEADLINE: " + " | ".join(headline[1:]))
+    typer.echo("HEADLINE: " + " | ".join(headline))
+
+    # Verdict-stratified breakdown lines: pull hallucination rate,
+    # calibrated abstention rate, and verdict mix from goal_accuracy
+    # details per baseline. These numbers are the architectural claim
+    # most users want to see at a glance.
+    typer.echo("")
+    typer.echo("Verdict-stratified breakdown (from goal_accuracy.details)")
+    typer.echo("-" * line_w)
+    breakdown_label_w = max(name_w, len("calibrated_abstention"))
+
+    def _detail(key: str, dotted: str) -> Any:
+        r = by_baseline[key].get("goal_accuracy") or {}
+        d = r.get("details") or {}
+        for part in dotted.split("."):
+            if not isinstance(d, dict):
+                return None
+            d = d.get(part)
+            if d is None:
+                return None
+        return d
+
+    def _fmt(v: Any) -> str:
+        if v is None:
+            return "n/a"
+        if isinstance(v, float):
+            return f"{v:.3f}"
+        if isinstance(v, dict):
+            # verdict_breakdown -> P/C/N
+            return (
+                f"{v.get('pass', 0):>3}/{v.get('caveat', 0):>3}/"
+                f"{v.get('no_verdict', 0):>3}"
+            )
+        return str(v)
+
+    rows_to_print = [
+        ("commit_rate", "commit_rate"),
+        ("hallucination_rate", "hallucination_rate"),
+        ("calibrated_abstention", "calibrated_abstention_rate"),
+        ("verdict P/C/N", "verdict_breakdown"),
+    ]
+    for label, key_path in rows_to_print:
+        cells = [f"{label:<{breakdown_label_w}}"]
+        for key, _, _ in parsed:
+            v = _detail(key, key_path)
+            cells.append(f"{_fmt(v):<{metric_w + status_w + 1}}")
+        typer.echo(" ".join(cells))
+    typer.echo("-" * line_w)
 
     out_yaml = {
         "run_id": run_id,
