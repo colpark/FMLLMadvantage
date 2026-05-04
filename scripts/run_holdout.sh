@@ -95,39 +95,83 @@ if [ "${SKIP_STRICT}" -eq 0 ]; then
     echo
 fi
 
-# 5. Evaluate everything.
+eval_one() {
+    # eval_one <baseline_label> <trajectories.jsonl>
+    # Runs scripts/run_evaluation.py on the given trajectories file,
+    # parses the report path from its stdout, and echoes JUST the
+    # report path on the final line. Tee'd output goes to stderr so
+    # callers can capture the report path without log noise.
+    local label="$1"
+    local traj="$2"
+    local logf
+    logf=$(mktemp)
+    uv run python scripts/run_evaluation.py \
+        --trajectories "${traj}" \
+        --h5-path "${H5_PATH:-data/synthetic_lj_v1/specimens.h5}" \
+        --out runs/eval 2>&1 | tee "${logf}" >&2
+    local rep
+    rep=$(grep -oE "runs/eval/[^ ]+/report\.yaml" "${logf}" | tail -1)
+    rm -f "${logf}"
+    if [ -z "${rep}" ]; then
+        echo "ERROR: could not parse report path for ${label}" >&2
+        exit 1
+    fi
+    echo "${rep}"
+}
+
+# 5. Evaluate the three default-literature baselines and capture each
+# report path explicitly. We do not rely on mtime ordering because
+# multiple eval runs can produce ambiguous results.
 echo "==============================================================="
 echo "==> Step 5: evaluate held-out runs"
 echo "==============================================================="
-BASELINES_ROOT=runs/holdout bash scripts/evaluate_baselines.sh
+NAKED_TRAJ=$(ls -td runs/holdout/naked/*/trajectories.jsonl 2>/dev/null | head -1 || true)
+NV_TRAJ=$(ls -td runs/holdout/no_verifier/*/trajectories.jsonl 2>/dev/null | head -1 || true)
+FULL_TRAJ=$(ls -td runs/holdout/full/*/trajectories.jsonl 2>/dev/null | head -1 || true)
+if [ -z "${NAKED_TRAJ}" ] || [ -z "${NV_TRAJ}" ] || [ -z "${FULL_TRAJ}" ]; then
+    echo "ERROR: held-out trajectories missing under runs/holdout/" >&2
+    exit 1
+fi
+
+echo "==> naked       : ${NAKED_TRAJ}"
+NAKED_REPORT=$(eval_one naked "${NAKED_TRAJ}")
+echo "    report      : ${NAKED_REPORT}"
 echo
+
+echo "==> no_verifier : ${NV_TRAJ}"
+NV_REPORT=$(eval_one no_verifier "${NV_TRAJ}")
+echo "    report      : ${NV_REPORT}"
+echo
+
+echo "==> full        : ${FULL_TRAJ}"
+FULL_REPORT=$(eval_one full "${FULL_TRAJ}")
+echo "    report      : ${FULL_REPORT}"
+echo
+
+echo "==> Default-literature comparison"
+uv run python scripts/compare_baselines.py \
+    --report "naked=${NAKED_REPORT}" \
+    --report "no_verifier=${NV_REPORT}" \
+    --report "full=${FULL_REPORT}"
 
 if [ "${SKIP_STRICT}" -eq 0 ]; then
     echo "==============================================================="
     echo "==> Step 5b: evaluate strict-literature full run"
     echo "==============================================================="
-    # Compare strict-literature full against the same naked + no_verifier.
-    # Build a synthetic baseline tree pointing at strict's full and the
-    # default holdout's naked + no_verifier.
-    NAKED=$(ls -td runs/holdout/naked/*/trajectories.jsonl 2>/dev/null | head -1)
-    NO_VERIFIER=$(ls -td runs/holdout/no_verifier/*/trajectories.jsonl 2>/dev/null | head -1)
-    FULL_STRICT=$(ls -td runs/holdout-strict/full/*/trajectories.jsonl 2>/dev/null | head -1)
-    if [ -n "${NAKED}" ] && [ -n "${NO_VERIFIER}" ] && [ -n "${FULL_STRICT}" ]; then
-        echo "Evaluating strict-literature lattice:"
-        echo "  naked         : ${NAKED}"
-        echo "  no_verifier   : ${NO_VERIFIER}"
-        echo "  full (strict) : ${FULL_STRICT}"
-
-        # Use a shadow tree so evaluate_baselines.sh's auto-discovery
-        # picks up strict's full instead of default's full.
-        SHADOW="runs/holdout-strict-compare"
-        mkdir -p "${SHADOW}/naked" "${SHADOW}/no_verifier" "${SHADOW}/full"
-        ln -sfn "$(dirname "${NAKED}")"       "${SHADOW}/naked/run"
-        ln -sfn "$(dirname "${NO_VERIFIER}")" "${SHADOW}/no_verifier/run"
-        ln -sfn "$(dirname "${FULL_STRICT}")" "${SHADOW}/full/run"
-        BASELINES_ROOT="${SHADOW}" bash scripts/evaluate_baselines.sh
+    STRICT_TRAJ=$(ls -td runs/holdout-strict/full/*/trajectories.jsonl 2>/dev/null | head -1 || true)
+    if [ -z "${STRICT_TRAJ}" ]; then
+        echo "Skipping strict comparison: no trajectories under runs/holdout-strict/full/" >&2
     else
-        echo "Skipping strict comparison: missing trajectories." >&2
+        echo "==> full (strict literature): ${STRICT_TRAJ}"
+        STRICT_REPORT=$(eval_one full_strict "${STRICT_TRAJ}")
+        echo "    report                  : ${STRICT_REPORT}"
+        echo
+        echo "==> Four-configuration comparison (default + strict)"
+        uv run python scripts/compare_baselines.py \
+            --report "naked=${NAKED_REPORT}" \
+            --report "no_verifier=${NV_REPORT}" \
+            --report "full_default=${FULL_REPORT}" \
+            --report "full_strict=${STRICT_REPORT}"
     fi
 fi
 
