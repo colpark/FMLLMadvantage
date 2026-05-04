@@ -302,17 +302,38 @@ def test_simulator_passes_for_consistent_claim():
 # ---------------------------------------------------------------------------
 
 
-def test_literature_passes_for_canonical_cluster():
-    """An FM2 prediction near the literature reference passes."""
-    src = LiteratureSource(LITERATURE_DB, energy_tolerance=0.30)
-    bridged = [_bridged_fm2(energy=-1.79)]  # close to N=7 triangular_disk reference
+def test_literature_default_passes_on_match_regardless_of_energy():
+    """Default mode (compare_energy=False) PASSes once (N, motif) match,
+    even when the candidate energy differs from the ground-state
+    reference. This is the post-Phase-8a default: ground-state
+    references should not flag finite-T data."""
+    src = LiteratureSource(LITERATURE_DB)
+    # Energy is far from the ground-state reference but the cluster
+    # type matches. Default mode should not CAVEAT.
+    bridged = [_bridged_fm2(energy=0.5)]
+    claim = PhysicalStateClaim(n_atoms=7, motif="triangular_disk")
+    verdict = src.check(bridged, claim)
+    assert verdict.decision == SourceDecision.PASS
+    assert verdict.evidence["compare_energy"] is False
+
+
+def test_literature_compare_energy_passes_for_canonical_cluster():
+    """With compare_energy=True an FM2 prediction near the literature
+    reference still passes."""
+    src = LiteratureSource(
+        LITERATURE_DB, compare_energy=True, energy_tolerance=0.30,
+    )
+    bridged = [_bridged_fm2(energy=-1.79)]  # close to N=7 triangular_disk
     claim = PhysicalStateClaim(n_atoms=7, motif="triangular_disk")
     verdict = src.check(bridged, claim)
     assert verdict.decision == SourceDecision.PASS
 
 
-def test_literature_caveat_for_strong_disagreement():
-    src = LiteratureSource(LITERATURE_DB, energy_tolerance=0.10)
+def test_literature_compare_energy_caveat_for_strong_disagreement():
+    """With compare_energy=True, a far-off energy still triggers CAVEAT."""
+    src = LiteratureSource(
+        LITERATURE_DB, compare_energy=True, energy_tolerance=0.10,
+    )
     bridged = [_bridged_fm2(energy=0.5)]  # nowhere near the LJ minimum
     claim = PhysicalStateClaim(n_atoms=7, motif="triangular_disk")
     verdict = src.check(bridged, claim)
@@ -324,6 +345,17 @@ def test_literature_skips_when_no_atom_count_available():
     bridged = [_bridged_fm2()]
     verdict = src.check(bridged, PhysicalStateClaim())
     assert verdict.decision == SourceDecision.SKIP
+
+
+def test_build_default_verifier_can_opt_in_to_energy_comparison():
+    """The integrator-level flag plumbs through to the literature source."""
+    v = build_default_verifier(
+        literature_db_path=LITERATURE_DB,
+        literature_compare_energy=True,
+    )
+    src = v._sources["literature"]
+    assert src is not None
+    assert src.compare_energy is True
 
 
 # ---------------------------------------------------------------------------

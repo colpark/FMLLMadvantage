@@ -4,8 +4,7 @@ The database lives at ``data/literature/clusters.json`` and is a list
 of canonical 2D Lennard-Jones clusters with their reference per-atom
 potential energies and first-peak g(r) positions. The source matches
 the claim and the bridged outputs against the closest entry by atom
-count and motif, then checks whether the FM-derived energy or
-temperature aligns with the literature value.
+count and motif.
 
 Database entry schema:
 
@@ -18,14 +17,32 @@ Database entry schema:
         "reference": str
     }
 
-The source returns:
+Decisions:
 
-    - ``PASS`` when the claim's atom count + motif match an entry and
-      no comparable FM value disagrees beyond the tolerance.
-    - ``CAVEAT`` when an FM value disagrees with the literature value.
-    - ``SKIP`` when the database has no matching entry.
-    - ``FAIL`` is reserved for future strict-match modes; the current
-      source never escalates to FAIL.
+    - ``PASS`` when the claim's atom count matches an entry in the DB.
+      The matched entry is returned in ``evidence`` for downstream
+      use (e.g. the LLM can read motif and reference structural
+      properties).
+    - ``CAVEAT`` when ``compare_energy=True`` AND a candidate FM-derived
+      energy disagrees with the literature reference beyond
+      ``energy_tolerance``.
+    - ``SKIP`` when no atom count is available or no entry matches.
+
+The energy comparison is disabled by default (``compare_energy=False``).
+The reason: the literature DB carries ground-state cluster energies
+(T → 0 limit), but the testbed's specimens sit at finite temperature
+(typically T ∈ [0.1, 2.0]). FM2 reports the actual finite-T per-atom
+potential energy, which is systematically higher than the ground-state
+reference by an amount that scales with T. Comparing the two and
+flagging the disagreement produces a near-constant CAVEAT signal that
+is uninformative as a confidence ranking — observed in the Phase 8a
+baseline run (165/200 commits flagged CAVEAT, 87% calibrated
+abstention but no useful filtering of correct vs incorrect commits).
+
+Re-enable ``compare_energy=True`` when:
+  - the literature DB grows a temperature-resolved energy axis, OR
+  - the verifier subtracts a kT correction to the ground-state value
+    before comparing.
 
 Depends on:
     json (stdlib).
@@ -46,7 +63,19 @@ from fmllm.verifier.schema import (
 
 
 class LiteratureSource:
-    """Verifier source backed by a curated cluster database."""
+    """Verifier source backed by a curated cluster database.
+
+    Args:
+        db_path: Path to ``clusters.json``.
+        compare_energy: When True, raise ``CAVEAT`` if a candidate
+            energy disagrees with the literature reference beyond
+            ``energy_tolerance``. Default False because the reference
+            energies are ground-state (T → 0) and the testbed runs
+            at finite temperature. Re-enable only after the DB
+            grows a T-resolved axis.
+        energy_tolerance: Absolute LJ-units tolerance for the
+            energy CAVEAT (only consulted when ``compare_energy`` is True).
+    """
 
     name = "literature"
 
@@ -54,9 +83,11 @@ class LiteratureSource:
         self,
         db_path: Path | str,
         *,
+        compare_energy: bool = False,
         energy_tolerance: float = 0.20,
     ) -> None:
         self.db_path = Path(db_path)
+        self.compare_energy = compare_energy
         self.energy_tolerance = energy_tolerance
         self._db: list[dict[str, Any]] = []
         if self.db_path.exists():
@@ -70,14 +101,12 @@ class LiteratureSource:
     def _match_entry(self, n_atoms: int, motif: str | None) -> dict[str, Any] | None:
         if not self._db:
             return None
-        # Prefer exact (N, motif) match; fall back to (N, any motif).
         if motif is not None:
             for e in self._db:
                 if int(e["n_atoms"]) == n_atoms and e["motif"] == motif:
                     return e
         candidates = [e for e in self._db if int(e["n_atoms"]) == n_atoms]
         if candidates:
-            # Pick the lowest-energy reference for the size.
             return min(candidates, key=lambda e: float(e["per_atom_potential_energy_lj"]))
         return None
 
@@ -86,7 +115,6 @@ class LiteratureSource:
         bridged_outputs: list[BridgedFMOutput],
         claim: PhysicalStateClaim,
     ) -> SourceVerdict:
-        # Decide which atom count to look up: the claim, or FM1's derived value.
         n_atoms = claim.n_atoms
         if n_atoms is None:
             for bo in bridged_outputs:
@@ -119,8 +147,9 @@ class LiteratureSource:
                 evidence={"db_size": len(self._db)},
             )
 
-        # Compare FM2 / claim energy against the reference.
-        ref_e = float(entry["per_atom_potential_energy_lj"])
+        # Pull a candidate energy if any FM or the claim provides one;
+        # used for evidence in every branch and (optionally) for the
+        # CAVEAT comparison when compare_energy is enabled.
         candidate_energy: float | None = None
         candidate_source: str | None = None
         for bo in bridged_outputs:
@@ -140,7 +169,21 @@ class LiteratureSource:
             "reference": entry,
             "candidate_energy": candidate_energy,
             "candidate_source": candidate_source,
+            "compare_energy": self.compare_energy,
         }
+
+        if not self.compare_energy:
+            return SourceVerdict(
+                source_name=self.name,
+                decision=SourceDecision.PASS,
+                confidence=0.8,
+                message=(
+                    f"matched literature entry N={n_atoms} "
+                    f"motif={entry['motif']}; energy comparison disabled "
+                    "(reference is ground-state, data is finite-T)"
+                ),
+                evidence=evidence,
+            )
 
         if candidate_energy is None:
             return SourceVerdict(
@@ -154,6 +197,7 @@ class LiteratureSource:
                 evidence=evidence,
             )
 
+        ref_e = float(entry["per_atom_potential_energy_lj"])
         diff = abs(candidate_energy - ref_e)
         if diff <= self.energy_tolerance:
             return SourceVerdict(

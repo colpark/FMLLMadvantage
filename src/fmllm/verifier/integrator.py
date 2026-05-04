@@ -58,7 +58,7 @@ _SOURCE_ORDER = ("rule_library", "literature", "cross_fm", "simulator", "conform
 
 _REVISION_SUGGESTIONS = {
     "rule_library": "Re-check the FM outputs against declared physics constraints; the LLM may need to retract or refine the typed claim.",
-    "literature": "The FM-derived energy or temperature disagrees with a curated reference cluster; consider whether the structural motif assumption is correct.",
+    "literature": "Literature raised a soft inconsistency on this cluster type; consult the matched reference entry for the canonical motif and structure.",
     "cross_fm": "Two FMs disagree on a shared causal variable; consult the FM with the strongest probe satisfaction or call additional FMs.",
     "simulator": "A short MD rollout from the claim's state did not reproduce the FM3-derived temperature; revisit the temperature estimate.",
     "conformal": "At least one FM flagged itself out-of-distribution or the claim sits outside the calibrated band; reduce confidence in that FM's contribution.",
@@ -86,13 +86,17 @@ class Verifier:
         default_config: SourcesConfig | None = None,
         cross_fm_tolerance: CrossFMToleranceMatrix | None = None,
         literature_db_path: Path | str | None = None,
+        literature_compare_energy: bool = False,
         simulator_kwargs: dict[str, Any] | None = None,
     ) -> None:
         self.default_config = default_config or SourcesConfig()
         self._sources = {
             "rule_library": RuleLibrarySource(),
             "literature": (
-                LiteratureSource(literature_db_path)
+                LiteratureSource(
+                    literature_db_path,
+                    compare_energy=literature_compare_energy,
+                )
                 if literature_db_path is not None
                 else None
             ),
@@ -195,10 +199,18 @@ def build_default_verifier(
     sources_config: SourcesConfig | None = None,
     tolerance_matrix_path: Path | str | None = None,
     literature_db_path: Path | str | None = None,
+    literature_compare_energy: bool = False,
     simulator_kwargs: dict[str, Any] | None = None,
 ) -> Verifier:
     """Convenience constructor that loads the cross-FM tolerance matrix
-    from disk if a path is given."""
+    from disk if a path is given.
+
+    The ``literature_compare_energy`` flag opts in to the legacy
+    behavior where the literature source raises CAVEAT on FM2-vs-
+    ground-state energy mismatches. Default is False; see
+    :class:`fmllm.verifier.sources.LiteratureSource` for the
+    rationale.
+    """
     tolerance_matrix: CrossFMToleranceMatrix | None = None
     if tolerance_matrix_path is not None:
         path = Path(tolerance_matrix_path)
@@ -208,6 +220,7 @@ def build_default_verifier(
         default_config=sources_config,
         cross_fm_tolerance=tolerance_matrix,
         literature_db_path=literature_db_path,
+        literature_compare_energy=literature_compare_energy,
         simulator_kwargs=simulator_kwargs,
     )
 
