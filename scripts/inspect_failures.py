@@ -95,6 +95,7 @@ def main(
     failing_sources: Counter[str] = Counter()
     by_motif: Counter[str] = Counter()
     by_n_bucket: Counter[str] = Counter()
+    failing_constraints: Counter[str] = Counter()
 
     for t in failing:
         by_termination[t.termination.value] += 1
@@ -103,6 +104,12 @@ def main(
             for sv in t.final_verdict.source_verdicts:
                 if sv.decision.value in ("fail", "caveat"):
                     failing_sources[f"{sv.source_name}:{sv.decision.value}"] += 1
+                if sv.source_name == "rule_library" and sv.decision.value == "fail":
+                    for c in (sv.evidence or {}).get("checks", []) or []:
+                        if not c.get("passed", True):
+                            cname = c.get("constraint_name", "?")
+                            fname = c.get("fm_name", "?")
+                            failing_constraints[f"{cname}@{fname}"] += 1
         else:
             by_aggregate["no_verdict"] += 1
 
@@ -125,6 +132,13 @@ def main(
     typer.echo("-" * 56)
     for src, n in failing_sources.most_common(10):
         typer.echo(f"  {src:<30} {n:>5}")
+
+    if failing_constraints:
+        typer.echo("")
+        typer.echo("Failing rule_library constraints")
+        typer.echo("-" * 56)
+        for c, n in failing_constraints.most_common(10):
+            typer.echo(f"  {c:<40} {n:>5}")
 
     typer.echo("")
     typer.echo(f"First {min(max_examples, len(failing))} failure examples")
@@ -153,11 +167,34 @@ def main(
             or "-"
         )
         first_msg = ""
+        first_constraint = ""
         if t.final_verdict is not None:
+            # Prefer FAIL over CAVEAT for the headline message, and for
+            # rule_library specifically drill into the individual check
+            # that triggered the fail (the top-level message just says
+            # "one or more hard constraints failed").
             for sv in t.final_verdict.source_verdicts:
-                if sv.decision.value == "fail":
-                    first_msg = sv.message
-                    break
+                if sv.decision.value != "fail":
+                    continue
+                first_msg = sv.message
+                if sv.source_name == "rule_library":
+                    checks = (sv.evidence or {}).get("checks") or []
+                    failing = [
+                        c for c in checks
+                        if not c.get("passed", True)
+                    ]
+                    if failing:
+                        names = ", ".join(
+                            f"{c.get('constraint_name', '?')}:{c.get('fm_name', '?')}"
+                            for c in failing
+                        )
+                        first_constraint = names
+                        first_msg = (
+                            f"{first_msg} | "
+                            f"{failing[0].get('constraint_name', '?')}: "
+                            f"{failing[0].get('message', '')}"
+                        )
+                break
             if not first_msg:
                 for sv in t.final_verdict.source_verdicts:
                     if sv.decision.value == "caveat":
@@ -170,8 +207,10 @@ def main(
         typer.echo(f"  {gt_str}")
         typer.echo(f"  {claim_str}")
         typer.echo(f"  flagged: {flagged}")
+        if first_constraint:
+            typer.echo(f"  failing checks: {first_constraint}")
         if first_msg:
-            typer.echo(f"  msg: {first_msg[:200]}")
+            typer.echo(f"  msg: {first_msg[:240]}")
         typer.echo("")
 
 
