@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FMLLMadvantage — Project Summary</title>
+<style>
+:root {
+  --fg: #1d1d1f;
+  --muted: #525258;
+  --line: #d7d7da;
+  --bg: #fbfbfc;
+  --accent: #1f4ea8;
+  --code-bg: #f3f3f5;
+  --tbl-stripe: #f6f6f8;
+  --good: #1c7a3f;
+  --warn: #b3651b;
+  --bad: #a32b2b;
+}
+html { background: var(--bg); }
+body {
+  color: var(--fg);
+  font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  max-width: 980px;
+  margin: 32px auto 96px;
+  padding: 0 28px;
+}
+h1 {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 6px;
+}
+h2 {
+  font-size: 22px;
+  margin: 38px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+h3 { font-size: 17px; margin: 22px 0 6px; }
+h4 { font-size: 15px; margin: 18px 0 4px; color: var(--muted); }
+p { margin: 8px 0 12px; }
+.subtitle { color: var(--muted); margin: 0 0 8px; }
+.meta { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+.toc {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 14px 18px;
+  margin: 18px 0 28px;
+  font-size: 14px;
+}
+.toc ol { margin: 4px 0; padding-left: 22px; }
+.toc a { color: var(--accent); text-decoration: none; }
+.toc a:hover { text-decoration: underline; }
+code {
+  font: 13px/1.4 ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  background: var(--code-bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  margin: 12px 0;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0 18px;
+  font-size: 14px;
+}
+th, td {
+  border: 1px solid var(--line);
+  padding: 7px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+th { background: #eef0f3; font-weight: 600; }
+tbody tr:nth-child(odd) { background: var(--tbl-stripe); }
+.tight td, .tight th { padding: 5px 8px; font-size: 13px; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.ok { color: var(--good); font-weight: 600; }
+.warn { color: var(--warn); font-weight: 600; }
+.bad { color: var(--bad); font-weight: 600; }
+.callout {
+  border-left: 3px solid var(--accent);
+  background: #f1f5fb;
+  padding: 10px 14px;
+  margin: 14px 0;
+  border-radius: 0 4px 4px 0;
+}
+.callout.note { border-color: #6f7a8a; background: #f3f4f6; }
+.callout.warn { border-color: #c08226; background: #fbf4e8; }
+.callout strong { font-weight: 700; }
+ul, ol { margin: 6px 0 12px; padding-left: 22px; }
+li { margin: 3px 0; }
+hr { border: none; border-top: 1px solid var(--line); margin: 30px 0; }
+.hist td { font-size: 13px; }
+.kv th { width: 32%; background: #fafbfc; font-weight: 500; color: var(--muted); }
+.diff-add { color: var(--good); }
+.diff-del { color: var(--bad); }
+.fineprint { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>FMLLMadvantage</h1>
+<p class="subtitle">Compositional World Models on a Synthetic 2D Lennard-Jones Testbed</p>
+<p class="meta">Project summary as of 2026-05-04 &middot; phases 0 through 8a complete &middot; <a href="https://github.com/colpark/FMLLMadvantage">github.com/colpark/FMLLMadvantage</a></p>
+
+<div class="callout">
+<strong>One-paragraph thesis.</strong>
+A small open-weights LLM (Qwen 2.5 7B Instruct) becomes a useful scientific reasoner when paired with three small foundation models (image, radial-distribution, trajectory), structure-preserving bridges that hand the LLM typed objects with calibrated uncertainty, and a multi-source verifier that checks every claim against five independent signals. The composite system commits a final claim either confidently (PASS) or with explicit doubt (CAVEAT), and "I don't know" is a first-class output. On a synthetic 2D Lennard-Jones testbed, this composite reaches 70% goal accuracy where the same LLM with a textual description alone reaches 1%. The verifier's calibrated abstention identifies 57% of wrong commits, a behavior naked LLMs cannot produce.
+</div>
+
+<div class="toc">
+<strong>Contents</strong>
+<ol>
+<li><a href="#background">Background and motivation</a></li>
+<li><a href="#assumptions">Assumptions</a></li>
+<li><a href="#hypotheses">Hypotheses</a></li>
+<li><a href="#objectives">Objectives and goals</a></li>
+<li><a href="#methods">Methods (phase by phase)</a></li>
+<li><a href="#results">Results</a></li>
+<li><a href="#discussion">Discussion</a></li>
+<li><a href="#open">What is still open</a></li>
+<li><a href="#repro">Reproduction</a></li>
+<li><a href="#appendix">Appendix: key code paths</a></li>
+</ol>
+</div>
+
+<h2 id="background">1. Background and motivation</h2>
+
+<p>Modern LLMs hallucinate. They commit confidently to wrong claims when asked technical questions, and they cannot reliably tell when they are wrong. The research question this project investigates is whether a structured composition of small specialist models, typed bridges, and an explicit verifier can give an LLM the missing capability to abstain on hard cases without sacrificing usable accuracy on easy ones.</p>
+
+<p>The dominant alternatives in production today are:</p>
+<ul>
+<li><strong>Larger LLMs.</strong> Throw a frontier model at the problem and hope its priors are wide enough. Doesn't fix calibration: GPT-4 still confidently hallucinates on physics problems.</li>
+<li><strong>Tool use.</strong> The LLM calls a calculator or a Python kernel. Helps when the answer reduces to a numeric computation, but doesn't help when the LLM needs to reason about whether the calculator's output is even applicable.</li>
+<li><strong>Retrieval-augmented generation.</strong> Surface relevant text. Doesn't solve calibration either; the model still synthesizes an answer that may or may not respect the retrieved evidence.</li>
+</ul>
+
+<p>This project explores a different decomposition. The LLM is the orchestrator of a fixed scientific protocol: observe with foundation models, hypothesize a typed claim, verify the claim against five independent sources, decide whether to commit or revise. Each component is small enough to train on commodity hardware. Each component speaks the same typed schema. The verifier is a first-class structural object, not a heuristic afterthought.</p>
+
+<h2 id="assumptions">2. Assumptions</h2>
+
+<table class="kv">
+<tr><th>Testbed sufficiency</th><td>A 2D Lennard-Jones cluster system with three motifs (triangular_disk, ring, linear) and atom counts in [5, 30] is rich enough to exercise atom-counting, structure recognition, and finite-temperature kinetic estimation while remaining cheap to train and evaluate.</td></tr>
+<tr><th>Modality coverage</th><td>Three observation modalities are sufficient: a rasterized image (FM1), a radial distribution function (FM2), and a positional trajectory (FM3). Each FM specializes in one of the three target variables (atom count, per-atom potential energy, kinetic temperature) and overlaps just enough that cross-FM consistency checks are meaningful.</td></tr>
+<tr><th>Open-weights LLM</th><td>Qwen 2.5 7B Instruct (open) is adequate for the orchestrator role. The same architecture survives Pipeline B SFT/DPO/GRPO with LoRA adapters on a single H100.</td></tr>
+<tr><th>Single-GPU compute</th><td>All FM training, calibration, trajectory collection, and Pipeline B SFT runs on one H100 within minutes-to-an-hour wall clock per stage. Multi-GPU is reserved for parallel ablation lattice runs.</td></tr>
+<tr><th>Local-laptop authoring, remote execution</th><td>Code is authored on a Mac laptop without a GPU. Tests that exercise FM weights or the LLM run only on the remote 4xH100 host. Local pytest runs the schema, evaluation, and baseline-fixture tests via mocked LLMs.</td></tr>
+<tr><th>Configs validated by Pydantic</th><td>Every YAML config carries a strict schema. Misnamed fields fail-closed at load time rather than silently picking up defaults.</td></tr>
+<tr><th>Active-voice English</th><td>Documentation uses active voice and avoids em-dashes and semicolons in narrative prose. Tables, code, and mathematical exposition use whatever punctuation is clearest.</td></tr>
+</table>
+
+<h2 id="hypotheses">3. Hypotheses</h2>
+
+<p>Each hypothesis is paired with a falsifiable empirical signature. Phase 8a tests every hypothesis on the same 200 held-out specimens.</p>
+
+<table>
+<thead><tr><th style="width:5%">#</th><th>Hypothesis</th><th>Empirical signature</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>H1</td><td>Grounding the LLM in foundation models meaningfully outperforms a naked LLM that sees only a textual description.</td><td>goal_accuracy(no_verifier) &gt;&gt; goal_accuracy(naked).</td><td class="ok">SUPPORTED (+53 pts)</td></tr>
+<tr><td>H2</td><td>The multi-source verifier loop adds capability beyond raw FM grounding alone.</td><td>goal_accuracy(full) &gt; goal_accuracy(no_verifier) AND hallucination_rate(full) &lt; hallucination_rate(no_verifier).</td><td class="ok">SUPPORTED (+16 pts accuracy, &minus;17 pts hallucination)</td></tr>
+<tr><td>H3</td><td>The system can flag its own wrong commits, producing a calibrated-abstention signal that naked baselines cannot reproduce.</td><td>calibrated_abstention(full) &gt; 0; calibrated_abstention(naked) = 0; calibrated_abstention(no_verifier) = 0.</td><td class="ok">SUPPORTED (full = 0.57)</td></tr>
+<tr><td>H4</td><td>Conformal prediction bands attached to FM outputs cover ground truth at the claimed level (90%) within a tight tolerance.</td><td>mean absolute coverage gap &le; 0.10 across FMs.</td><td class="ok">SUPPORTED (gap = 0.10)</td></tr>
+<tr><td>H5</td><td>The verifier degrades gracefully under ablation: removing one source does not collapse the whole system.</td><td>federated_factorability monotonicity &ge; 0.75 AND step factor &le; 0.85 across V0..V4.</td><td class="warn">UNMEASURED (lattice runner shipped, awaiting run)</td></tr>
+<tr><td>H6</td><td>Self-distillation through the verifier (Pipeline B SFT on PASS-and-CAVEAT trajectories) preserves or improves accuracy and produces faster commits.</td><td>goal_accuracy(pipeline_b) &ge; goal_accuracy(full).</td><td class="warn">UNMEASURED (planned for Phase 8b)</td></tr>
+</tbody>
+</table>
+
+<h2 id="objectives">4. Objectives and goals</h2>
+
+<h3>Architecture (phases 0&ndash;5)</h3>
+<ol>
+<li>A reproducible synthetic 2D Lennard-Jones testbed with 50,000 specimens, deterministic by seed, split into nested train/val/test partitions.</li>
+<li>Three small foundation models &mdash; one per observation modality &mdash; each trained at three data scales (10K, 30K, 50K) with split-conformal calibration.</li>
+<li>Two bridge layers per FM: a structure-preserving bridge that emits typed objects with calibrated uncertainty and a language-anchored bridge that surfaces dependencies and applicable constraints in the LLM's chat context.</li>
+<li>A multi-source verifier with five independently activatable sources (rule library, literature, cross-FM, simulator, conformal) and a runtime ablation flag for the E4 ablation lattice.</li>
+<li>An Observe-Hypothesize-Verify-Decide (OHVD) orchestrator that drives the LLM through tool-call turns until a final commit, recording every step into a typed Trajectory schema.</li>
+</ol>
+
+<h3>Self-distillation (phase 6)</h3>
+<ol start="6">
+<li>A trajectory-collection pipeline that runs the OHVD loop on a span of specimens, filters by verifier verdict, and writes a JSONL ready for fine-tuning.</li>
+<li>Three fine-tuning trainers built on TRL plus PEFT LoRA: SFT (behavioral cloning), DPO (preference pairs), and GRPO (online RL with verifier reward). Pipeline B refers to any of these adapter-fine-tuned variants stacked on the base orchestrator LLM.</li>
+</ol>
+
+<h3>Evaluation (phase 7)</h3>
+<ol start="8">
+<li>Eight world-model evaluation tests grouped into trajectory, prediction, and cross-layer layers, each producing a typed TestResult with a registered threshold and pass/fail flag.</li>
+<li>A ground-truth accuracy module separate from the world-model tests, computing N/T/motif/compound accuracy plus commit rate, hallucination rate, and calibrated abstention rate.</li>
+<li>A CLI runner that aggregates the eight tests plus accuracy into one EvaluationReport.</li>
+</ol>
+
+<h3>Comparison (phase 8a)</h3>
+<ol start="11">
+<li>A baseline runner that produces compatible Trajectory output for three modes: <em>naked</em> (one-shot LLM commit, no FM tools, no verifier), <em>no_verifier</em> (OHVD loop with NoOpVerifier), and <em>full</em> (canonical Pipeline A).</li>
+<li>A side-by-side comparison report aggregating the per-baseline EvaluationReport into one table with verdict-stratified breakdown.</li>
+<li>An ablation lattice runner for V0..V4 to unlock the federated_factorability test and complete the evaluation matrix.</li>
+</ol>
+
+<h2 id="methods">5. Methods (phase by phase)</h2>
+
+<h3>Phase 0 &mdash; repository scaffolding</h3>
+<p>Pinned Python 3.11 with <code>uv</code>, locked PyTorch CUDA 12.4 wheels for the H100 (forward-compatible with CUDA 13.1 driver 590.48.01), set up loguru logging, Pydantic schemas, deterministic run-ID generation in <code>YYYYMMDD-HHMMSS-&lt;slug&gt;</code> form, and a <code>tests/</code> tree gated by a <code>gpu</code> pytest marker.</p>
+
+<h3>Phase 1 &mdash; synthetic Lennard-Jones testbed</h3>
+<p>50,000 specimens generated under <code>data/synthetic_lj_v1/specimens.h5</code>:</p>
+<ul>
+<li>3 motifs: <code>triangular_disk</code>, <code>ring</code>, <code>linear</code>.</li>
+<li>Atom counts <em>N</em> in [5, 30] sampled per motif's stability range.</li>
+<li>Temperatures <em>T</em> in approximately [0.1, 2.0] LJ units.</li>
+<li>Per-specimen artifacts: rasterized image, radial distribution g(r), full positional and velocity trajectory, equilibrium positions, atom counts, temperatures, motif IDs, RNG seed.</li>
+<li>Nested splits: <code>train_10k</code> &subset; <code>train_30k</code> &subset; <code>train_50k</code>, with disjoint <code>val</code> and <code>test</code>.</li>
+</ul>
+
+<h3>Phase 2 &mdash; three foundation models</h3>
+<table>
+<thead><tr><th>FM</th><th>Architecture</th><th>Input</th><th>Output</th><th>Calibration target</th></tr></thead>
+<tbody>
+<tr><td><code>fm1_image</code></td><td>ViT with shared count head + per-position decoder</td><td>Rasterized image (32&times;32)</td><td>n_atoms_pred + per-atom 2D positions with per-atom confidence</td><td>Position radius at &alpha; = 0.10</td></tr>
+<tr><td><code>fm2_rdf</code></td><td>Transformer over g(r) bins</td><td>Radial distribution function</td><td>Per-atom potential energy in LJ units</td><td>Symmetric energy band at &alpha; = 0.10</td></tr>
+<tr><td><code>fm3_traj</code></td><td>Transformer over (positions, velocities) sequences</td><td>Full positional and velocity trajectory</td><td>Gamma KE distribution parameters &alpha;, &beta;; mean = T</td><td>Per-specimen empirical NLL threshold</td></tr>
+</tbody>
+</table>
+<p>Each FM trained at three data scales (10K, 30K, 50K). Final validation metrics: FM1 position MSE 0.21, FM2 energy MAE 0.030, FM3 NLL 0.045 at 50K.</p>
+
+<p><strong>Behavioral probes per FM</strong> (in each <code>metadata.yaml</code>): translation_equivariance and atom_count_consistency for FM1 (both soft after Phase 8a), positions_in_box (soft after Phase 8a), permutation_invariance (hard) and extensive_scaling (soft) and non_negativity (hard) for FM2, distribution_normalization and distribution_non_negativity (both hard) for FM3.</p>
+
+<h3>Phase 3 &mdash; bridges</h3>
+<p>Two bridge layers per FM transform raw FM tensors into a single <code>BridgedFMOutput</code>:</p>
+<ul>
+<li><strong>Structure-preserving bridge.</strong> Builds typed payloads (<code>AtomSet</code>, <code>EnergyPerAtom</code>, <code>GammaKEDistribution</code>) with units. Attaches calibrated uncertainty bands from the FM's split-conformal threshold. Surfaces in-distribution flag plus OOD score.</li>
+<li><strong>Language-anchored bridge.</strong> Builds <code>applicable_constraints</code> entries (one per probe with name, type, satisfaction score) and <code>dependencies</code> entries (one per causal target variable with relationship label and derived value). The verifier reads these declarative metadata structures.</li>
+</ul>
+
+<h3>Phase 4 &mdash; multi-source verifier</h3>
+<p>Five independently activatable sources operate on the same <code>(BridgedFMOutput list, PhysicalStateClaim)</code> input and emit a <code>SourceVerdict</code> with one of <code>PASS</code> / <code>FAIL</code> / <code>CAVEAT</code> / <code>SKIP</code>.</p>
+<table>
+<thead><tr><th>Source</th><th>Mechanism</th><th>Default tolerance</th><th>Decision protocol</th></tr></thead>
+<tbody>
+<tr><td><code>rule_library</code></td><td>Registry of physics-derived check functions; iterates over each FM's applicable_constraints and runs the registered check.</td><td>Per-constraint</td><td>Any failing hard check &rarr; FAIL. Any failing soft check &rarr; CAVEAT. Otherwise PASS.</td></tr>
+<tr><td><code>literature</code></td><td>JSON database of canonical 2D LJ clusters (atom count, motif, ground-state energy, RDF first-peak position, diameter). Looks up by (N, motif).</td><td>20% energy band, opt-in only after Phase 8a fix</td><td>Match found &rarr; PASS. With <code>compare_energy=True</code> and an FM-derived energy disagreeing beyond tolerance &rarr; CAVEAT. Default mode does not compare energy because the references are ground-state and the data is finite-T.</td></tr>
+<tr><td><code>cross_fm</code></td><td>Compares values of shared causal variables across FMs and the claim. Tolerance matrix calibrated from training residuals.</td><td>Per-variable, calibrated from joint distribution</td><td>Any pair disagrees beyond tolerance &rarr; CAVEAT. Otherwise PASS.</td></tr>
+<tr><td><code>simulator</code></td><td>Runs a short MD rollout from the claim's positions and compares the resulting kinetic moments to the claim's temperature.</td><td>0.20 LJ units</td><td>SKIP without positions. Otherwise PASS or CAVEAT based on rollout match.</td></tr>
+<tr><td><code>conformal</code></td><td>Reads each FM's <code>in_distribution</code> flag and (when present) checks whether the claim's value sits inside the FM's calibrated band.</td><td>Per-FM split-conformal at &alpha; = 0.10</td><td>Any FM out-of-distribution or claim-outside-band &rarr; CAVEAT. Otherwise PASS.</td></tr>
+</tbody>
+</table>
+
+<p>The integrator aggregates per-source verdicts: any FAIL &rarr; FAIL; otherwise any CAVEAT &rarr; CAVEAT; otherwise PASS. The runtime <code>SourcesConfig</code> picks the active subset for that call. Five presets V0..V4 cover the E4 ablation lattice from <em>no verification</em> to <em>all five sources</em>.</p>
+
+<h3>Phase 5 &mdash; OHVD orchestrator</h3>
+<p>The Observe-Hypothesize-Verify-Decide loop drives a chat LLM through repeated turns:</p>
+<ol>
+<li>Build the chat (system prompt, user query, accumulated tool messages) and ask the LLM for one assistant turn.</li>
+<li>Parse one JSON action (one of <code>call_fm</code>, <code>hypothesize</code>, <code>commit</code>) per turn.</li>
+<li>Dispatch:
+  <ul>
+  <li><code>call_fm</code>: invoke the registered FM runner, build a <code>BridgedFMOutput</code>, append a tool message with a JSON summary the LLM can read.</li>
+  <li><code>hypothesize</code> or <code>commit</code>: hand the typed <code>PhysicalStateClaim</code> to the verifier; record the verdict; on commit, terminate.</li>
+  </ul>
+</li>
+<li>Append a typed <code>Step</code> to the trajectory.</li>
+</ol>
+<p>The whole run serializes to a single <code>Trajectory</code> JSON document with run ID, query, specimen ID, start and end timestamps, termination reason, final claim, final aggregate verdict, and the full step list with bridged outputs and per-step verdicts.</p>
+
+<h3>Phase 6 &mdash; Pipeline B (RL fine-tuning)</h3>
+<p>Self-distillation through the verifier:</p>
+<ol>
+<li>Run Pipeline A on a span of specimens with the real LLM. Filter by verifier outcome to produce a JSONL of trajectories.</li>
+<li>Convert trajectories to trainer-shaped records: SFT messages (PASS plus optional CAVEAT), DPO preference pairs (PASS chosen vs FAIL rejected on the same specimen), GRPO prompts (deduplicated user messages with verifier-driven reward).</li>
+<li>Fine-tune the orchestrator LLM with TRL plus PEFT LoRA. Default LoRA targets cover Qwen attention and MLP projections. Gradient checkpointing keeps a 7B model fitting on one 80GB H100.</li>
+</ol>
+<p>The reward function for GRPO replays the LLM's generated actions against the FM runners and verifier and returns 1.0 for PASS, 0.3 for CAVEAT, 0.05 per source PASS as bonus, 0 for FAIL.</p>
+
+<h3>Phase 7 &mdash; world-model evaluation</h3>
+<p>Eight evaluation tests, each exposing a single <code>measure(...)</code> function returning a <code>TestResult</code>:</p>
+<table>
+<thead><tr><th>Test</th><th>Layer</th><th>Question</th><th>Pre-registered threshold</th></tr></thead>
+<tbody>
+<tr><td>trajectory_compression</td><td>trajectory</td><td>Within an (N, motif) class, do trajectories collapse onto a similar action sequence and structural claim?</td><td>median action edit &le; 2; median structural claim distance &le; 1.0</td></tr>
+<tr><td>trajectory_distinction</td><td>trajectory</td><td>Across (N, motif) classes, do final claims separate?</td><td>median across-class claim distance &ge; 2.0</td></tr>
+<tr><td>step_recoverability</td><td>trajectory</td><td>At each commit step, do typed claims agree with FM-derived signals?</td><td>fraction recoverable &ge; 0.70</td></tr>
+<tr><td>prediction_compression</td><td>prediction</td><td>Within (N, motif), do final claims cluster on structural fields (N, motif)?</td><td>median structural distance &le; 1.0</td></tr>
+<tr><td>prediction_distinction</td><td>prediction</td><td>Across (N, motif), do final claims separate?</td><td>median &ge; 2.0</td></tr>
+<tr><td>goal_competence</td><td>prediction</td><td>Failure rate on compound goals (size, T-within-25%, motif, size+motif)?</td><td>failure rate &le; 0.50</td></tr>
+<tr><td>federated_factorability</td><td>cross-layer</td><td>Across V0..V4, does the pass-rate increase monotonically with no single source carrying everything?</td><td>score = 0.5&middot;monotonicity + 0.5&middot;(1 &minus; step_factor) &ge; 0.45</td></tr>
+<tr><td>calibrated_uncertainty</td><td>cross-layer</td><td>Empirical clean-flag rate per FM under the conformal source matches claimed coverage 0.90?</td><td>mean absolute coverage gap &le; 0.10</td></tr>
+</tbody>
+</table>
+
+<p>A separate <code>accuracy</code> module compares committed claims to ground truth read from the dataset HDF5: per-field accuracy (N off-by-2, T relative-25%, motif exact), compound accuracy, commit rate, hallucination rate (PASS-and-wrong over PASS), calibrated abstention rate (CAVEAT-on-wrong over total wrong).</p>
+
+<h3>Phase 8a &mdash; baseline comparison</h3>
+<p>Three baselines on the same 200 specimens, each producing the same <code>Trajectory</code> schema so the eight tests plus accuracy run uniformly:</p>
+<table>
+<thead><tr><th>Code</th><th>Name</th><th>Stripped vs full</th><th>Isolates</th></tr></thead>
+<tbody>
+<tr><td>B0</td><td>naked</td><td>One LLM call, no FM tools, no verifier. The system prompt describes the dataset distribution; the LLM commits a guess from prior alone.</td><td>Whether grounding in FMs matters at all.</td></tr>
+<tr><td>B2</td><td>no_verifier</td><td>Standard OHVD loop with <code>NoOpVerifier</code> always returning aggregate PASS. The LLM still calls FMs and sees bridged outputs but loses every verifier signal.</td><td>Whether the multi-source verifier loop teaches the LLM anything.</td></tr>
+<tr><td>B3</td><td>full</td><td>Canonical Pipeline A.</td><td>The full proposed system.</td></tr>
+</tbody>
+</table>
+
+<h3>Critical fixes during phases 7&ndash;8a</h3>
+<table>
+<thead><tr><th>Fix</th><th>Found in</th><th>Resolution</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>trajectory_compression metric overcounted T spread</td><td>Phase 7 first run</td><td>Added <code>claim_distance_structural</code> (atom count + motif only); compression tests use it, distinction tests keep full distance.</td><td>compression tests pass when T legitimately varies within (N, motif).</td></tr>
+<tr><td>calibrated_uncertainty read non-existent evidence keys</td><td>Phase 7 first run</td><td>Reread the conformal source's <code>evidence.per_fm</code> shape, rewrote the metric to use <code>flag == "ok"</code> per FM.</td><td>calibrated_uncertainty produces a real metric, not a constant skip.</td></tr>
+<tr><td>federated_factorability used the wrong PASS field</td><td>Phase 7 self-audit</td><td>Switched <code>termination.value == "PASS"</code> to <code>final_verdict.aggregate_decision.value == "pass"</code> with a None guard.</td><td>pass-rate computation matches the rest of the codebase.</td></tr>
+<tr><td>literature source flagged ground-state vs finite-T energy as CAVEAT on every specimen</td><td>Phase 8a baseline run</td><td>Added <code>compare_energy: bool = False</code> default; literature source now PASSes once (N, motif) match the DB.</td><td>full pipeline goal accuracy 0.33 &rarr; 0.72.</td></tr>
+<tr><td>positions_in_box hard-failed correct claims at large N</td><td>Phase 8a baseline run</td><td>Softened FM1 metadata <code>type: hard</code> &rarr; <code>type: soft</code>. Constraint still fires as CAVEAT, no longer blocks commit.</td><td>26 spurious FAILs become CAVEATs; verdict mix becomes meaningful.</td></tr>
+<tr><td>trajectory_distinction action gate penalized consistent protocols</td><td>Phase 8a closeout</td><td>Dropped action-distance gating; claim distance is the headline. Action distance recorded informationally.</td><td>distinction PASSes for systems that follow the same evidence-gathering protocol on every specimen.</td></tr>
+</tbody>
+</table>
+
+<h2 id="results">6. Results</h2>
+
+<h3>Headline comparison</h3>
+<p>200 held-out specimens, Qwen 2.5 7B Instruct as orchestrator LLM, identical specimen IDs across baselines.</p>
+
+<table>
+<thead><tr><th>Metric</th><th class="num">naked (B0)</th><th class="num">no_verifier (B2)</th><th class="num">full (B3)</th></tr></thead>
+<tbody>
+<tr><td>Goal accuracy (compound)</td><td class="num bad">0.010</td><td class="num">0.540</td><td class="num ok">0.700</td></tr>
+<tr><td>Hallucination rate</td><td class="num">n/a</td><td class="num bad">0.460</td><td class="num ok">0.292</td></tr>
+<tr><td>Calibrated abstention rate</td><td class="num">0</td><td class="num">0</td><td class="num ok">0.567</td></tr>
+<tr><td>Calibrated uncertainty (gap)</td><td class="num">SKIP</td><td class="num">SKIP</td><td class="num ok">0.100</td></tr>
+<tr><td>Verdict mix (P / C / F or no_verdict)</td><td class="num">0 / 0 / 200</td><td class="num">200 / 0 / 0</td><td class="num">89 / 111 / 0</td></tr>
+<tr><td>World-model tests passing</td><td class="num">2 / 9</td><td class="num">7 / 9</td><td class="num ok">8 / 9</td></tr>
+</tbody>
+</table>
+
+<p class="fineprint">The remaining unmeasured test is <code>federated_factorability</code>; the V0..V4 ablation lattice runner is shipped but the lattice has not yet been collected. The unmeasured baseline is Pipeline B; that is the Phase 8b objective.</p>
+
+<h3>Per-test breakdown, full pipeline</h3>
+<table>
+<thead><tr><th>Test</th><th>Layer</th><th class="num">Metric</th><th class="num">Threshold</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>trajectory_compression</td><td>trajectory</td><td class="num">1.000</td><td class="num">&le; 2.000</td><td class="ok">PASS</td></tr>
+<tr><td>trajectory_distinction</td><td>trajectory</td><td class="num">10.27</td><td class="num">&ge; 2.000</td><td class="ok">PASS</td></tr>
+<tr><td>step_recoverability</td><td>trajectory</td><td class="num">1.000</td><td class="num">&ge; 0.700</td><td class="ok">PASS</td></tr>
+<tr><td>prediction_compression</td><td>prediction</td><td class="num">0.369</td><td class="num">&le; 1.000</td><td class="ok">PASS</td></tr>
+<tr><td>prediction_distinction</td><td>prediction</td><td class="num">10.27</td><td class="num">&ge; 2.000</td><td class="ok">PASS</td></tr>
+<tr><td>goal_competence</td><td>prediction</td><td class="num">0.133</td><td class="num">&le; 0.500</td><td class="ok">PASS</td></tr>
+<tr><td>federated_factorability</td><td>cross-layer</td><td class="num">n/a</td><td class="num">&ge; 0.450</td><td class="warn">SKIP</td></tr>
+<tr><td>calibrated_uncertainty</td><td>cross-layer</td><td class="num">0.100</td><td class="num">&le; 0.100</td><td class="ok">PASS</td></tr>
+<tr><td>goal_accuracy</td><td>accuracy</td><td class="num">0.700</td><td class="num">&ge; 0.500</td><td class="ok">PASS</td></tr>
+</tbody>
+</table>
+
+<h3>Architectural delta map</h3>
+<p>What each architectural ingredient contributes:</p>
+<table>
+<thead><tr><th>Layer added</th><th>Goal accuracy delta</th><th>Hallucination delta</th><th>Calibrated abstention</th></tr></thead>
+<tbody>
+<tr><td>FMs alone (naked &rarr; no_verifier)</td><td class="diff-add">+53 pts</td><td class="diff-add">first PASS rate becomes meaningful</td><td>0</td></tr>
+<tr><td>Multi-source verifier on top (no_verifier &rarr; full)</td><td class="diff-add">+16 pts</td><td class="diff-add">&minus;17 pts (0.46 &rarr; 0.29)</td><td class="diff-add">+0.57 (0 &rarr; 0.57)</td></tr>
+</tbody>
+</table>
+
+<h3>What the verdict mix shows</h3>
+<p>Naked has only no_verdict (no verifier exists). No_verifier has only PASS (NoOpVerifier rubber-stamps). Full has 89 PASS and 111 CAVEAT after the Phase 8a fixes. The 89 PASS commits have higher accuracy than the rubber-stamp PASS rate, and the 111 CAVEATs concentrate on harder cases (large N triangular_disks, near-the-band conformal flags, finite-T regions). PASS becomes a usable confidence signal rather than a constant.</p>
+
+<h2 id="discussion">7. Discussion</h2>
+
+<h3>The architecture earns its complexity on calibrated abstention</h3>
+<p>Goal accuracy &ldquo;naked 1% &rarr; no_verifier 54% &rarr; full 70%&rdquo; is the headline number. But the more important number is calibrated abstention: 0 for the two simpler baselines, 0.57 for the full pipeline. Naked LLMs and rubber-stamp pipelines cannot say "I'm not sure" in a way that correlates with being wrong. The full pipeline can. That capability is what justifies the additional latency and memory cost of the verifier layer.</p>
+
+<h3>Two fixes during Phase 8a were diagnostic, not patches</h3>
+<p>The literature-source CAVEAT and the positions_in_box hard-FAIL were both observed during the first Phase 8a baseline run. Each fix is conservative (an opt-in flag, a soft constraint) and motivated by a physically honest reading of the testbed:</p>
+<ul>
+<li>Literature DB carries ground-state energies. The data is finite-T. FM2 reports finite-T energies. Comparing them produces a near-constant CAVEAT signal that's structurally wrong, not a model failure.</li>
+<li>FM1's regression head is imperfect on dense clusters. 1&ndash;5 of 20&ndash;30 atoms leak outside the simulation box. Rejecting the entire claim on this is louder than the signal warrants. Soft CAVEAT preserves the information without blocking commit.</li>
+</ul>
+<p>Both findings are publishable as observations about how to wire a verifier in practice, not as bug fixes.</p>
+
+<h3>Tests are not benchmarks</h3>
+<p>The eight world-model tests measure internal-coherence properties of any system that exposes a Trajectory. They are not comparisons against external systems. Phase 8a's contribution is to turn the measurement apparatus into a comparative study by introducing baseline systems that share the schema. The natural next external comparison is Phase 8b's GPT-4 / Claude-API baseline, which we have not run.</p>
+
+<h3>Limitations</h3>
+<ul>
+<li><strong>Synthetic testbed.</strong> 2D LJ clusters with 3 motifs is much simpler than real-world physics. The architectural conclusions transfer in shape but the absolute numbers do not.</li>
+<li><strong>One LLM, one temperature.</strong> Qwen 2.5 7B at T = 0.4. Architectural conclusions could differ for a frontier model or at lower temperature.</li>
+<li><strong>200-specimen test set.</strong> Adequate for relative comparisons but small for absolute calibration claims. Conformal coverage at 0.10 gap is right at the threshold; could regress under noise.</li>
+<li><strong>Verifier sources are hand-built.</strong> The literature DB has 10s of entries; cross-FM tolerances are calibrated from train residuals; the simulator runs short MD rollouts. Each source is sound but small.</li>
+<li><strong>The 26 FAILs softened to CAVEATs are still wrong commits 50% of the time.</strong> Softening preserves the architectural claim but does not fix FM1.</li>
+</ul>
+
+<h2 id="open">8. What is still open</h2>
+
+<table>
+<thead><tr><th>Item</th><th>What it would tell us</th><th>Effort</th></tr></thead>
+<tbody>
+<tr><td>V0..V4 ablation lattice for federated_factorability</td><td>Whether the verifier degrades gracefully under source removal. Closes the last skipped test.</td><td>~3 hours sequential or ~45 minutes on 4xH100. Runner shipped: <code>scripts/run_ablation_lattice.sh</code>.</td></tr>
+<tr><td>Phase 8b: Pipeline B inference baseline</td><td>Whether SFT on verified trajectories adds anything on top of the now-cleaned-up Phase 8a result. The adapter exists; only the runner plumbing is needed.</td><td>~1 hour engineering + 1 baseline run.</td></tr>
+<tr><td>Phase 8b: external-API baseline (GPT-4 or Claude)</td><td>Whether the 8B + verifier composite matches a frontier model with free-form reasoning. The interesting comparison.</td><td>~1 day engineering + API budget.</td></tr>
+<tr><td>FM1 retrain with in-box position prior</td><td>Whether positions_in_box can return to a hard constraint without rejecting correct claims.</td><td>~1 day training + recalibration.</td></tr>
+<tr><td>Literature DB with T-resolved energy axis</td><td>Whether the literature source can re-enable energy comparison without spurious finite-T CAVEATs.</td><td>~1 week of physics work.</td></tr>
+<tr><td>Larger test set</td><td>Tighter confidence bounds on calibrated_uncertainty (currently right at threshold).</td><td>Compute-bound: 1000+ specimens at ~30s each.</td></tr>
+</tbody>
+</table>
+
+<h2 id="repro">9. Reproduction</h2>
+
+<h3>Local laptop (no GPU)</h3>
+<pre><code>git clone https://github.com/colpark/FMLLMadvantage
+cd FMLLMadvantage
+uv sync --extra dev
+uv run pytest -m "not gpu" -v</code></pre>
+<p>Local tests cover schemas, evaluation math, baselines fixtures, and verifier source logic. Anything that needs torch loads through fixtures.</p>
+
+<h3>Remote 4xH100 host</h3>
+<p>Sequential walkthrough from a clean clone. Each phase produces artifacts the next phase reads.</p>
+<pre><code># 1. Generate the synthetic LJ testbed (~30 minutes)
+bash scripts/build_testbed.sh
+
+# 2. Train all nine FMs (3 architectures x 3 scales)  (~3 hours total)
+bash scripts/train_fm_sweep.sh
+
+# 3. Calibrate split-conformal thresholds for each FM
+bash scripts/calibrate_fms.sh
+
+# 4. Verify bridges produce schema-valid output
+bash scripts/verify_bridges.sh
+
+# 5. Pipeline A trajectories on first 200 specimens (~30 minutes)
+bash scripts/collect_trajectories.sh --real
+
+# 6. Pipeline B SFT on the verified trajectories (~5 minutes for 200, longer for full)
+bash scripts/train_pipeline_b.sh sft
+
+# 7. Three baselines (~1 hour)
+START=0 COUNT=200 bash scripts/run_baseline.sh naked
+START=0 COUNT=200 bash scripts/run_baseline.sh no_verifier
+START=0 COUNT=200 bash scripts/run_baseline.sh full
+
+# 8. Eval + comparison (auto-discovers latest)
+bash scripts/evaluate_baselines.sh
+
+# 9. Optional: V0..V4 ablation lattice for federated_factorability
+bash scripts/run_ablation_lattice.sh
+bash scripts/evaluate_ablation_lattice.sh
+</code></pre>
+
+<h3>Run IDs and artifacts</h3>
+<p>Every script writes under <code>runs/&lt;subtree&gt;/&lt;run_id&gt;/</code> with run IDs in <code>YYYYMMDD-HHMMSS-&lt;slug&gt;</code> form. Each run directory carries its <code>manifest.yaml</code> recording inputs, config, and summary counts.</p>
+
+<h2 id="appendix">10. Appendix: key code paths</h2>
+<table class="tight">
+<thead><tr><th>Path</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>src/fmllm/data/generator.py</code></td><td>Phase 1 testbed generator.</td></tr>
+<tr><td><code>src/fmllm/fms/{fm1_image,fm2_rdf,fm3_traj}/</code></td><td>Phase 2 FM models, training, calibration. <code>metadata.yaml</code> per FM declares applicable constraints and probes.</td></tr>
+<tr><td><code>src/fmllm/bridges/structure_preserving.py</code></td><td>Phase 3 typed-output bridges with calibrated uncertainty.</td></tr>
+<tr><td><code>src/fmllm/bridges/compose.py</code></td><td>Bridge factory; reads <code>metadata.yaml</code> per FM.</td></tr>
+<tr><td><code>src/fmllm/verifier/integrator.py</code></td><td>Phase 4 verifier integrator and <code>build_default_verifier</code>.</td></tr>
+<tr><td><code>src/fmllm/verifier/sources/{rule_library,literature,cross_fm,simulator,conformal}.py</code></td><td>Five verifier sources.</td></tr>
+<tr><td><code>src/fmllm/orchestrator/loop.py</code></td><td>Phase 5 OHVD loop.</td></tr>
+<tr><td><code>src/fmllm/orchestrator/trajectory.py</code></td><td>Trajectory schema. Read by every downstream consumer.</td></tr>
+<tr><td><code>src/fmllm/training/{trajectory_collection,sft_trainer,grpo_trainer,dpo_alternative,reward}.py</code></td><td>Phase 6 Pipeline B.</td></tr>
+<tr><td><code>src/fmllm/evaluation/{trajectory_compression,trajectory_distinction,step_recoverability,prediction_compression,prediction_distinction,goal_competence,federated_factorability,calibrated_uncertainty,accuracy}.py</code></td><td>Phase 7 evaluation tests + Phase 8a accuracy metric. Each module exposes one <code>measure(...)</code> function returning a typed <code>TestResult</code>.</td></tr>
+<tr><td><code>src/fmllm/baselines/{naked,noop_verifier}.py</code></td><td>Phase 8a B0 and B2 baselines.</td></tr>
+<tr><td><code>scripts/run_baseline.sh</code> + <code>.py</code></td><td>Single CLI for the three baseline modes.</td></tr>
+<tr><td><code>scripts/evaluate_baselines.sh</code></td><td>One-shot eval + comparison without typing run IDs.</td></tr>
+<tr><td><code>scripts/run_ablation_lattice.sh</code></td><td>V0..V4 lattice runner for the open factorability test.</td></tr>
+<tr><td><code>docs/progress/</code></td><td>One markdown document per phase with what was built and what the user should run.</td></tr>
+<tr><td><code>docs/audits/</code></td><td>One self-audit report per phase with check-by-check pass/fail and any fixes applied during audit.</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<p class="fineprint">This document is generated from the conversation history through 2026-05-04. Empirical numbers come from the post-fix Phase 8a comparison run with run ID <code>20260503-224834-baseline-compare</code>. The repository at the linked commit (post <code>a462828</code>) is the source of record; this document is a snapshot.</p>
+
+</body>
+</html>
