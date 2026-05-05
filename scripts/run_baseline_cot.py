@@ -185,7 +185,11 @@ def main(
     max_new_tokens: int = typer.Option(384, "--max-new-tokens"),
     batch_size: int = typer.Option(64, "--batch-size"),
     device: str = typer.Option("auto", "--device"),
-    log_every: int = typer.Option(50, "--log-every"),
+    log_every: int = typer.Option(
+        10, "--log-every",
+        help="Print a progress line every N specimens (in addition "
+             "to the first and last). Default 10.",
+    ),
 ) -> None:
     """Run the CoT-SFT baseline on a list of specimens."""
     from peft import PeftModel  # noqa: PLC0415
@@ -272,6 +276,8 @@ def main(
         "parse_failure": 0,
     }
     started_run = _now_utc()
+    typer.echo("==> Starting generation (one specimen at a time)")
+    typer.echo("")
 
     with h5py.File(h5_path, "r") as h5, jsonl_path.open("w") as out_f:
         for start_i in range(0, len(specimen_ids), batch_size):
@@ -362,14 +368,21 @@ def main(
                 else:
                     counters["parse_failure"] += 1
                 out_f.write(traj.model_dump_json() + "\n")
+                out_f.flush()
 
-            done = min(start_i + batch_size, len(specimen_ids))
-            if done == len(specimen_ids) or (done % log_every == 0):
-                typer.echo(
-                    f"    {done}/{len(specimen_ids)} specimens "
-                    f"(committed={counters['committed']}, "
-                    f"parse_failure={counters['parse_failure']})"
-                )
+                # Per-specimen progress so the user sees movement
+                # rather than a blank screen between batch boundaries.
+                if (
+                    counters["total"] == 1
+                    or counters["total"] % log_every == 0
+                    or counters["total"] == len(specimen_ids)
+                ):
+                    typer.echo(
+                        f"    {counters['total']:>4}/{len(specimen_ids)} "
+                        f"sid={int(sid):<6} "
+                        f"committed={counters['committed']} "
+                        f"parse_failure={counters['parse_failure']}"
+                    )
 
     typer.echo(f"==> JSONL: {jsonl_path}")
     with (out_dir / "summary.yaml").open("w") as f:
