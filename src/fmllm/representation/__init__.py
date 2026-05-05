@@ -32,6 +32,11 @@ from fmllm.representation.causal import (
     audit_feature,
     filter_features_by_causal_effect,
 )
+from fmllm.representation.llm_labels import (
+    LLMFeatureLabel,
+    label_llm_feature,
+    rank_features_for_steering,
+)
 from fmllm.representation.llm_sae import (
     ActivationHarvester,
     ActivationSteerer,
@@ -45,9 +50,12 @@ __all__ = [
     "CausalEffect",
     "Intervention",
     "InterventionKind",
+    "LLMFeatureLabel",
     "TopKSAE",
     "audit_feature",
     "build_topk_sae",
     "filter_features_by_causal_effect",
+    "label_llm_feature",
+    "rank_features_for_steering",
     "resolve_layer_module",
 ]

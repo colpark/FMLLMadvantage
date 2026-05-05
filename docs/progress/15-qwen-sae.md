@@ -147,19 +147,33 @@ Will not prove:
 - Whether steering via these features improves goal accuracy --
   that's Stage D.
 
-### Stage C (deferred): correlation labelling
+### Stage C: correlation labelling (now shipped)
 
-Mirror Phase 13's labelling but per-Qwen-feature:
+`src/fmllm/representation/llm_labels.py` defines
+``label_llm_feature`` plus ``rank_features_for_steering``. The
+labelling axis set extends Phase 13's specimen-only set with two
+task-side axes:
 
-  * Categorical lock against verdict / correctness.
-  * Continuous correlation against motif / atom_count / temperature
-    / phase via the metadata.yaml.
+  * ``verdict`` -- ``pass`` / ``caveat`` / ``fail`` / ``null`` from
+    the multi-source verifier. Features that lock on CAVEAT are
+    candidates for "amplify when uncertain" steering.
+  * ``is_correct`` -- whether the trajectory's final claim matched
+    ground truth. Features that lock on ``correct=False`` PASS
+    rows are the canonical down-clamp targets.
 
-If the SAE picks up a feature that fires preferentially on
-*confidently-wrong* PASS commits, that's the candidate for Stage D
-ablation. If a feature distinguishes "ring vs triangular_disk" with
-high purity, that's a candidate for amplification when Qwen seems
-unsure.
+`scripts/label_qwen_sae_features.py + .sh` consumes the Stage A
+metadata.yaml + Stage B sae.pt and emits:
+
+```
+runs/qwen_sae_labels/<run_id>/labels.json
+runs/qwen_sae_labels/<run_id>/details.yaml
+runs/qwen_sae_labels/<run_id>/steering_candidates.yaml
+runs/qwen_sae_labels/<run_id>/manifest.yaml
+```
+
+The ``steering_candidates.yaml`` partitions the locked features into
+three pre-ranked lists (``wrong_pass``, ``wrong_any``, ``caveat``)
+that Stage D will draw from.
 
 ### Stage D (deferred): activation steering baseline
 
