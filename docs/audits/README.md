@@ -16,5 +16,6 @@ check pass / fail / fixed, and signs off only when every check passes.
 - `06-rl-finetuning-audit.md` - Phase 6 audit.
 - `07-evaluation-audit.md` - Phase 7 audit.
 - `08-baselines-audit.md` - Phase 8a audit.
+- `09-connector-audit.md` - Phase 9 scaffolding audit (probes + Stage 1 alignment).
 
 Subsequent phases add one audit report each.

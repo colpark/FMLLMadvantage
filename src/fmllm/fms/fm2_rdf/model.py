@@ -72,14 +72,20 @@ class FM2RDFTransformer(nn.Module):
         nn.init.trunc_normal_(self.cls_token, std=0.02)
         nn.init.trunc_normal_(self.pos_embed, std=0.02)
 
-    def forward(self, rdf: Tensor) -> Tensor:
-        """Map ``g(r)`` to a scalar per-atom energy.
+    def encode(self, rdf: Tensor) -> Tensor:
+        """Return the full hidden-state sequence without applying the head.
+
+        The pre-head representation is what probes (Phase 9.0) and the
+        Layer C connector (Phase 9.A) consume. ``forward`` calls into
+        this and then applies the energy head; both paths share one
+        backbone forward pass.
 
         Args:
             rdf: ``(B, rdf_bins)`` tensor with the RDF values.
 
         Returns:
-            Tensor of shape ``(B,)``.
+            ``(B, rdf_bins + 1, embed_dim)`` tensor whose first token
+            along axis 1 is the CLS summary the energy head reads.
         """
         if rdf.dim() != 2 or rdf.shape[-1] != self.rdf_bins:
             raise ValueError(
@@ -92,6 +98,18 @@ class FM2RDFTransformer(nn.Module):
         x = x + self.pos_embed
         x = self.encoder(x)
         x = self.encoder_norm(x)
+        return x
+
+    def forward(self, rdf: Tensor) -> Tensor:
+        """Map ``g(r)`` to a scalar per-atom energy.
+
+        Args:
+            rdf: ``(B, rdf_bins)`` tensor with the RDF values.
+
+        Returns:
+            Tensor of shape ``(B,)``.
+        """
+        x = self.encode(rdf)
         cls_out = x[:, 0]
         return self.energy_head(cls_out).squeeze(-1)
 
