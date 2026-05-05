@@ -185,10 +185,86 @@ output, 0.695 goal accuracy on held-out). Phases 9 and 10 ruled
 out two natural extensions (richer connector, richer
 representation). Phase 11 is the third axis: train the LLM
 itself on the existing typed evidence using a CoT-over-probes
-recipe. If Stage 2 lifts the held-out goal accuracy or reduces
-hallucination, the architectural conclusion is "LLM training
-matters, even when the typed-output contract is doing its job."
-If it doesn't, the conclusion tightens further: the typed-output
-contract on this testbed is at the architectural ceiling for
-LLM-FM composition, and the next research target is a different
-testbed.
+recipe.
+
+## Phase 11.B empirical result
+
+The trained adapter from Stage 2 was evaluated on the locked
+held-out range ``[40000, 40200)`` via
+``scripts/run_baseline_cot.py``. Output went to
+``runs/holdout/cot_sft/`` so the existing held-out evaluator
+(``scripts/evaluate_baselines.sh``) discovered it automatically
+alongside ``naked``, ``no_verifier``, and ``full``.
+
+Held-out four-way comparison (locked thresholds, commit ``c723eaa``):
+
+| Metric | naked | cot_sft | no_verifier | full |
+|---|---|---|---|---|
+| goal_accuracy | 0.000 | **0.467** | 0.540 | **0.695** |
+| commit_rate | 1.000 | 0.975 | 1.000 | 1.000 |
+| hallucination_rate | n/a | n/a | 0.460 | 0.255 |
+| calibrated_abstention | 0 | 0 | 0 | 0.590 |
+| verdict P/C/F | 0/0/200 | 0/0/195 | 200/0/0 | 98/102/0 |
+
+Three findings:
+
+1. **Trained CoT-on-probes is real, not template-memorized.**
+   ``cot_sft`` beats ``naked`` by +47 points. The held-out number
+   confirms what the inspector showed: the Stage 2 LoRA taught
+   Qwen to read probe outputs and reason over them, and the
+   conditioning generalizes to unseen specimens.
+
+2. **The probe bank is a lossy summary of bridged FM tool
+   messages.** ``cot_sft`` (probe-bank facts only) reaches 0.467;
+   ``no_verifier`` (full bridged FM JSON in tool messages)
+   reaches 0.540. Same LLM, same testbed, same scoring. The
+   7-point gap measures what the LLM extracts from the typed
+   bridged contract beyond what the probes encode -- calibrated
+   uncertainty bands, dependency edges, applicable_constraint
+   scores.
+
+3. **The verifier earns its +23 points over ``cot_sft``.** Three
+   capabilities the verifier provides that ``cot_sft`` cannot:
+   - iterative revision under physical-consistency feedback,
+   - cross-source agreement checks across five sources, and
+   - calibrated abstention (CAVEAT vs PASS, with 102 of 200
+     commits flagged).
+
+## Phase 11 outcome
+
+Phase 11 closes as the third converging negative result against
+the Phase 8a typed-output + verifier baseline:
+
+- **Phase 9 (Layer C)**: connector on supervised FM2 cannot
+  transfer specimen identity through Stage 1 alignment.
+- **Phase 10 (Layer D)**: masked-RDF SSL pretraining produces a
+  poorer representation than supervised energy regression.
+- **Phase 11 (post-hoc CoT-SFT)**: trained reasoning over probes
+  reaches 0.467 vs Pipeline A's 0.695 on a held-out set with
+  locked thresholds.
+
+Combined architectural verdict: on this testbed, the typed
+head-output contract plus multi-source verifier is at the
+architectural ceiling for LLM-FM composition. Each of the three
+natural extensions (richer connector, richer representation,
+trained inference-time reasoning) was tested empirically and
+landed below the Phase 8a baseline.
+
+## What is *not* refuted by this finding
+
+- **Stage 3 / Stage 4 might still help.** Phase 11 measured
+  single-shot SFT on synthetic templates only. STaR-style
+  rejection sampling on verifier-PASS trajectories or GRPO with
+  verifier reward could close some of the 23-point gap. Both are
+  unbuilt and would be a Phase 12 effort if pursued.
+- **Different testbed assumptions could give different answers.**
+  The conclusion is testbed-specific. A task whose answer space
+  is not already discretized into named scalars might benefit
+  meaningfully from connector tokens or SSL representations.
+  Phase 8b (external-LLM baseline) is the closest test of this.
+- **The verifier's configuration matters.** Pipeline A's 0.695
+  is conditional on the Phase 8a fix to disable
+  ``literature.compare_energy``. With strict literature mode the
+  full pipeline was 0.471 -- below ``cot_sft``'s 0.467. So "the
+  verifier is irreplaceable" depends on it being configured in
+  the post-fix mode.

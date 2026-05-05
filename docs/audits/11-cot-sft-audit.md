@@ -2,9 +2,11 @@
 
 **Audited at:** 2026-05-04T23:50:00Z
 **Auditor:** Claude Code (self-audit)
-**Result:** PASS for the Stage 0 + Stage 1 + Stage 2 scaffolding.
-Stage 3 (rejection sampling) and Stage 4 (verifier-reward RL) are
-intentionally deferred and listed as next phases.
+**Result:** PASS for the Stage 0 + Stage 1 + Stage 2 scaffolding plus
+the Phase 11.B held-out evaluation. Phase 11 closes with a documented
+negative result on goal accuracy (0.467 vs Pipeline A's 0.695); Stage
+3 (rejection sampling) and Stage 4 (verifier-reward RL) remain
+intentionally deferred.
 
 ## Summary
 
@@ -127,6 +129,35 @@ These are the natural next phases. Each is conditional on Stage 2
 producing a meaningful effect, which is itself conditional on
 running the SFT trainer on the remote.
 
+## Phase 11.B held-out result (added post-run)
+
+The trained adapter from Stage 2 was evaluated on the locked
+held-out range. Output landed under ``runs/holdout/cot_sft/`` so
+the existing held-out evaluator picked it up alongside the Phase
+8a baselines.
+
+| Metric | naked | cot_sft | no_verifier | full |
+|---|---|---|---|---|
+| goal_accuracy | 0.000 | **0.467** | 0.540 | **0.695** |
+| commit_rate | 1.000 | 0.975 | 1.000 | 1.000 |
+| hallucination_rate | n/a | n/a | 0.460 | 0.255 |
+| calibrated_abstention | 0 | 0 | 0 | 0.590 |
+
+The architectural reading (detailed in
+``docs/progress/11-cot-sft.md``):
+
+- ``cot_sft`` beats ``naked`` by +47 points -- trained CoT
+  reasoning is real and generalizes to unseen specimens.
+- ``cot_sft`` is below ``no_verifier`` by 7 points -- the probe
+  bank is a lossy summary of the bridged FM tool messages the
+  full Pipeline gives the LLM.
+- ``cot_sft`` is below ``full`` by 23 points -- the verifier
+  provides iterative revision, cross-source consistency, and
+  calibrated abstention that single-shot CoT-SFT cannot match.
+
+Phase 11 therefore closes as the third converging negative
+result on this testbed, alongside Phase 9 and Phase 10.
+
 ## Reproduction
 
 ```bash
@@ -137,4 +168,7 @@ uv run pytest tests/test_synthetic_cot.py -v   # 11 tests, no GPU
 bash scripts/train_probe_bank.sh                                # Stage 0, ~5-10 min
 bash scripts/build_cot_dataset.sh                               # Stage 1, ~5-15 min
 bash scripts/train_cot_sft.sh                                   # Stage 2, ~2-4 hours
+SPECIMEN_IDS_FILE=runs/holdout_lock/ids.json \
+    bash scripts/run_baseline_cot.sh                            # Phase 11.B, ~30-50 min
+BASELINES_ROOT=runs/holdout bash scripts/evaluate_baselines.sh  # four-way table
 ```

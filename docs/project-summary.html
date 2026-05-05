@@ -110,7 +110,7 @@ hr { border: none; border-top: 1px solid var(--line); margin: 30px 0; }
 
 <h1>FMLLMadvantage</h1>
 <p class="subtitle">Compositional World Models on a Synthetic 2D Lennard-Jones Testbed</p>
-<p class="meta">Project summary as of 2026-05-04 &middot; phases 0 through 10 complete &middot; <a href="https://github.com/colpark/FMLLMadvantage">github.com/colpark/FMLLMadvantage</a></p>
+<p class="meta">Project summary as of 2026-05-05 &middot; phases 0 through 11 complete &middot; <a href="https://github.com/colpark/FMLLMadvantage">github.com/colpark/FMLLMadvantage</a></p>
 
 <div class="callout">
 <strong>One-paragraph thesis.</strong>
@@ -441,6 +441,45 @@ A small open-weights LLM (Qwen 2.5 7B Instruct) becomes a useful scientific reas
 <li><strong>Contrastive or cross-modal SSL</strong> &mdash; replace masked-RDF with an objective that explicitly rewards specimen-distinguishing features (SimCLR-style or CLIP-style across modalities). Would test whether the Phase 10 finding is a property of this particular SSL objective.</li>
 </ul>
 
+<h2>7.7 Phase 11 negative result: trained CoT-on-probes does not match Pipeline A</h2>
+
+<p>Phase 11 tested the third architectural extension: instead of changing the FM (Phase 10) or the connector (Phase 9), train the LLM itself with LoRA on synthetic chain-of-thought reasoning over typed probe outputs derived from the same supervised FM2. Pipeline:</p>
+
+<ol>
+<li><strong>Stage 0</strong>: train a five-probe bank on FM2's frozen CLS embedding (atom count, motif, phase, coordination, RDF first peak).</li>
+<li><strong>Stage 1</strong>: emit ~10K synthetic SFT records of shape (probe outputs &rarr; templated reasoning chain &rarr; ground-truth claim). The final commit comes from ground truth, not from probe consensus, so the LLM learns to bridge probe evidence to truth.</li>
+<li><strong>Stage 2</strong>: LoRA-fine-tune Qwen 2.5 7B for 3 epochs on the synthetic dataset (final loss 0.194).</li>
+<li><strong>Phase 11.B</strong>: run the trained adapter on the locked held-out range with single-shot inference (probes &rarr; Qwen+LoRA &rarr; parsed final commit), score with the existing held-out evaluator.</li>
+</ol>
+
+<table>
+<thead><tr><th>Metric</th><th class="num">naked</th><th class="num">cot_sft</th><th class="num">no_verifier</th><th class="num">full</th></tr></thead>
+<tbody>
+<tr><td>goal_accuracy</td><td class="num">0.000</td><td class="num">0.467</td><td class="num">0.540</td><td class="num ok"><strong>0.695</strong></td></tr>
+<tr><td>commit_rate</td><td class="num">1.000</td><td class="num">0.975</td><td class="num">1.000</td><td class="num">1.000</td></tr>
+<tr><td>hallucination_rate</td><td class="num">n/a</td><td class="num">n/a</td><td class="num bad">0.460</td><td class="num">0.255</td></tr>
+<tr><td>calibrated_abstention</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num ok">0.590</td></tr>
+</tbody>
+</table>
+
+<p>Three findings:</p>
+
+<ol>
+<li><strong>Trained CoT-on-probes is real, not template-memorized.</strong> ``cot_sft`` beats ``naked`` by +47 points, confirming that the Stage 2 LoRA taught Qwen to read probe outputs and reason over them. The behavior generalizes to held-out specimens.</li>
+<li><strong>The probe bank is a lossy summary of bridged FM tool messages.</strong> ``cot_sft`` (probe-bank facts only) reaches 0.467; ``no_verifier`` (full bridged FM JSON in tool messages) reaches 0.540. The 7-point gap measures what the LLM extracts from the typed bridged contract beyond what the probes encode.</li>
+<li><strong>The verifier earns its +23 points over ``cot_sft``.</strong> Three things the verifier provides that ``cot_sft`` cannot: iterative revision under physical-consistency feedback, cross-source consistency checks, and calibrated abstention.</li>
+</ol>
+
+<p>Combined with Phase 9 and Phase 10, the convergent verdict is that <strong>on this testbed, the Phase 8a typed head-output contract plus multi-source verifier is at the architectural ceiling for LLM-FM composition</strong>. Each of the three natural extensions tried (richer connector, richer representation, trained inference-time reasoning) was measured empirically and landed below the Phase 8a baseline.</p>
+
+<p>What this finding does <em>not</em> rule out:</p>
+
+<ul>
+<li><strong>Stage 3 / Stage 4.</strong> Phase 11 measured single-shot SFT on synthetic templates only. STaR-style rejection sampling on verifier-PASS trajectories or GRPO with verifier reward could close some of the 23-point gap.</li>
+<li><strong>Different testbed assumptions.</strong> Tasks whose answer space is not already discretized into named scalars might benefit meaningfully from connector tokens or SSL representations. Phase 8b (frontier-LLM baseline) is the closest test of this.</li>
+<li><strong>The verifier configuration matters.</strong> Pipeline A's 0.695 is conditional on the Phase 8a fix to disable ``literature.compare_energy``. With strict literature mode the full pipeline scored 0.471 -- below ``cot_sft``'s 0.467. So "the verifier is irreplaceable" depends on the verifier being configured in the post-fix mode.</li>
+</ul>
+
 <h2 id="open">8. What is still open</h2>
 
 <table>
@@ -454,6 +493,9 @@ A small open-weights LLM (Qwen 2.5 7B Instruct) becomes a useful scientific reas
 <tr><td>Larger test set</td><td>Tighter confidence bounds on calibrated_uncertainty (currently right at threshold).</td><td>Compute-bound: 1000+ specimens at ~30s each.</td></tr>
 <tr><td>Stage 2 task tuning of the FM2 connector</td><td>Whether end-to-end LoRA on Qwen against the identification objective changes the Phase 9 negative result.</td><td>~1 week.</td></tr>
 <tr><td>Layer D self-supervised FM2 pretraining</td><td>Whether masked-RDF modeling or contrastive training raises the representation ceiling above what Phase 9 probes recovered.</td><td>Multi-week. Out-of-scope for the current testbed.</td></tr>
+<tr><td>Phase 12: STaR-style rejection sampling on top of Stage 2</td><td>Whether resampling-and-filtering CoTs on verifier-PASS trajectories closes the 23-point Phase 11 gap.</td><td>~1 week.</td></tr>
+<tr><td>Phase 12: GRPO with verifier reward on top of Stage 2</td><td>Whether direct verifier-reward RL closes the 23-point Phase 11 gap. Phase 6 has the GRPO trainer; only the prompt format would change.</td><td>~1 week.</td></tr>
+<tr><td>Phase 8b: frontier LLM baseline (GPT-4 / Claude)</td><td>Whether 8B + verifier matches a frontier model with free-form reasoning. The interesting external comparison.</td><td>~1 day engineering + API budget.</td></tr>
 </tbody>
 </table>
 
