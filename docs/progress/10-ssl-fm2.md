@@ -165,3 +165,70 @@ backbones." If it doesn't, the story tightens: even with a richer
 representation, Stage 1 alignment alone can't transfer specimen
 identity, and the answer is Stage 2 task tuning or a different
 connector recipe entirely.
+
+## Phase 10 empirical result (negative, with a twist)
+
+The SSL probing run produced a counter-intuitive headline: every
+structural probe got *worse* under masked-RDF pretraining than under
+supervised energy regression.
+
+| Probe | Supervised (Phase 9) | SSL (Phase 10) | Δ |
+|---|---|---|---|
+| n_atoms r² | 0.20 | 0.12 | −0.08 |
+| diameter r² | 0.66 | 0.59 | −0.07 |
+| mean_coordination r² | 0.63 | 0.47 | −0.16 |
+| phase acc | 0.88 | 0.81 | −0.07 |
+
+Three plausible mechanisms drive this direction:
+
+1. **Energy supervision is implicitly extracting structural
+   features.** Per-atom potential energy is a lossy function of
+   atom count, motif, phase, and coordination, so the backbone
+   needs to encode these as intermediates to predict it. The Phase
+   9 probes told us those intermediates were partially recoverable;
+   the Phase 10 SSL result says the supervised objective is the
+   thing that put them there.
+
+2. **Masked-RDF is too local.** The g(r) is smooth and locally
+   correlated. Predicting a masked bin reduces to interpolation
+   from neighbors. The model can minimize the SSL loss without
+   learning global structural features, so the representation
+   ends up biased toward local fluctuations rather than the global
+   identity the probes test.
+
+3. **20 epochs of pretraining is short, but the gap is wider than
+   what training-time alone is likely to close.** Going from 0.12
+   to 0.20+ probably requires a different objective, not just more
+   steps of masked reconstruction.
+
+### Combined Phase 9 + Phase 10 architectural verdict
+
+- **Phase 9 (Layer C)**: connector on supervised FM2 cannot transfer
+  specimen identity to the LLM via Stage 1 alignment.
+- **Phase 10 (Layer D, masked-RDF)**: replacing the supervised
+  objective with masked-RDF reconstruction *degrades* the
+  structural representation on every probe.
+
+The honest read is that, on this testbed, **the supervised energy-
+regression objective happens to be a strong structural-representation
+learner as a byproduct**, and the path to richer LLM-FM coupling is
+not upstream of the connector. Two natural directions remain
+unexplored:
+
+- **Stage 2 task tuning** — LoRA the orchestrator LLM end-to-end on
+  the actual identification objective with the Phase 9 connector
+  rather than on the templated-text alignment surrogate. Can fix the
+  template-collapse failure mode of Phase 9 without changing the FM.
+- **Contrastive or cross-modal SSL** — replace masked reconstruction
+  with an objective that explicitly rewards specimen-distinguishing
+  features (SimCLR pairs of perturbed RDFs, or CLIP-style alignment
+  between (RDF, image) pairs). Would test whether the Phase 10
+  result is a property of *this* SSL objective rather than SSL in
+  general.
+
+If neither path is taken, the architectural conclusion stands: on
+this testbed, the typed head-output contract is the architectural
+ceiling, and the verifier-gated Pipeline A from Phase 8a captures
+essentially all the recoverable signal. That is itself a
+publishable finding about LLM-FM composition on typed scientific
+tasks.

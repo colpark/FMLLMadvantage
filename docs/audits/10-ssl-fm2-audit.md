@@ -120,6 +120,36 @@ have ruled out both connector richness (Phase 9) and SSL
 representation richness (Phase 10) on this testbed and we would
 move on to either contrastive SSL or external-LLM comparison.
 
+## Empirical findings (added post-run)
+
+Probing on the SSL backbone after 20 epochs of masked-RDF
+reconstruction produced a counter-intuitive negative result:
+
+| Probe | Supervised | SSL | Δ |
+|---|---|---|---|
+| n_atoms r² | 0.20 | 0.12 | −0.08 |
+| diameter r² | 0.66 | 0.59 | −0.07 |
+| mean_coordination r² | 0.63 | 0.47 | −0.16 |
+| phase acc | 0.88 | 0.81 | −0.07 |
+
+Every structural probe is worse under SSL pretraining than under
+supervised energy regression. The architectural inference (detailed
+in `docs/progress/10-ssl-fm2.md`) is that energy supervision is
+implicitly extracting structural features as a byproduct, and
+replacing it with an objective that does not require those
+features (local-bin reconstruction is satisfiable by interpolation)
+loses the byproduct.
+
+### Why Phase 10.B (SSL-connector training) is not run
+
+The Phase 10.B step was conditional on the SSL probes showing
+meaningful improvement. They show the opposite. Training a Stage 1
+connector on a strictly poorer representation cannot improve over
+the Phase 9 connector that already failed. The connector run on
+SSL is therefore deliberately *not* attempted, matching the
+Phase 9.B decision pattern: only run downstream phases when the
+upstream signal supports it.
+
 ## Reproduction
 
 ```bash
@@ -127,9 +157,10 @@ move on to either contrastive SSL or external-LLM comparison.
 uv run pytest tests/test_fm2_ssl.py tests/test_connectors.py -v
 
 # Remote
-bash scripts/train_fm2_ssl.sh                                   # Phase 10
+bash scripts/train_fm2_ssl.sh                                   # ~30-60 min
 bash scripts/run_fm2_probes.sh                                  # baseline (supervised)
 USE_SSL=1 bash scripts/run_fm2_probes.sh                        # SSL probes
-USE_SSL=1 bash scripts/train_fm2_connector.sh                   # connector on SSL
-bash scripts/inspect_connector.sh -n 8                          # qualitative comparison
+# Phase 10.B is not run; the SSL representation is poorer than
+# supervised, so a connector trained on it cannot improve over the
+# Phase 9 connector that already failed.
 ```

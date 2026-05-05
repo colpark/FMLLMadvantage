@@ -110,7 +110,7 @@ hr { border: none; border-top: 1px solid var(--line); margin: 30px 0; }
 
 <h1>FMLLMadvantage</h1>
 <p class="subtitle">Compositional World Models on a Synthetic 2D Lennard-Jones Testbed</p>
-<p class="meta">Project summary as of 2026-05-04 &middot; phases 0 through 9 complete &middot; <a href="https://github.com/colpark/FMLLMadvantage">github.com/colpark/FMLLMadvantage</a></p>
+<p class="meta">Project summary as of 2026-05-04 &middot; phases 0 through 10 complete &middot; <a href="https://github.com/colpark/FMLLMadvantage">github.com/colpark/FMLLMadvantage</a></p>
 
 <div class="callout">
 <strong>One-paragraph thesis.</strong>
@@ -415,6 +415,31 @@ A small open-weights LLM (Qwen 2.5 7B Instruct) becomes a useful scientific reas
 </ul>
 
 <p>Neither was run; both are documented in <code>docs/progress/09-connector.md</code> as candidate next phases.</p>
+
+<h2>7.6 Phase 10 negative result: self-supervised pretraining did not raise the representation ceiling</h2>
+
+<p>The Phase 9 negative result raised the question of whether the bottleneck was the connector (Layer C) or the representation it consumes. Phase 10 directly tested the representation half by training a parallel FM2 backbone with masked-RDF reconstruction (a self-supervised objective) on the same input data. The expectation was that an SSL representation would be richer than the energy-only supervised one. The empirical finding is the opposite.</p>
+
+<table>
+<thead><tr><th>Probe</th><th class="num">Supervised (Phase 9)</th><th class="num">SSL (Phase 10)</th><th class="num">&Delta;</th></tr></thead>
+<tbody>
+<tr><td>n_atoms r&sup2;</td><td class="num">0.20</td><td class="num">0.12</td><td class="num bad">&minus;0.08</td></tr>
+<tr><td>diameter r&sup2;</td><td class="num">0.66</td><td class="num">0.59</td><td class="num bad">&minus;0.07</td></tr>
+<tr><td>mean_coordination r&sup2;</td><td class="num">0.63</td><td class="num">0.47</td><td class="num bad">&minus;0.16</td></tr>
+<tr><td>phase acc</td><td class="num">0.88</td><td class="num">0.81</td><td class="num bad">&minus;0.07</td></tr>
+</tbody>
+</table>
+
+<p>Every structural probe got <strong>worse</strong> under masked-RDF pretraining. The architectural inference: the supervised energy-regression objective happens to be a strong structural-representation learner as a byproduct, because predicting per-atom energy from a g(r) requires the backbone to encode atom count, motif, phase, and coordination as intermediates. Masked-RDF reconstruction, by contrast, is satisfiable by local interpolation between adjacent g(r) bins and does not require global structural features. The SSL objective shaped a representation biased toward local fluctuations rather than the global identity the probes test.</p>
+
+<p>Combined with Phase 9, the architectural verdict on this testbed is sharp: <strong>the typed head-output contract is the architectural ceiling</strong>. Layer C (richer connectors) does not extract more, and Layer D (richer representations via masked-RDF) does not produce more. The verifier-gated Pipeline A from Phase 8a captures essentially all the recoverable signal under this combination of FMs, dataset, and orchestrator LLM. That is the publishable architectural finding the project landed on.</p>
+
+<p>Two paths remain unexplored should anyone want to push past this ceiling:</p>
+
+<ul>
+<li><strong>Stage 2 task tuning</strong> &mdash; LoRA-fine-tune the orchestrator LLM end-to-end on the identification objective with the Phase 9 connector, replacing the templated-text alignment surrogate that Stage 1 used.</li>
+<li><strong>Contrastive or cross-modal SSL</strong> &mdash; replace masked-RDF with an objective that explicitly rewards specimen-distinguishing features (SimCLR-style or CLIP-style across modalities). Would test whether the Phase 10 finding is a property of this particular SSL objective.</li>
+</ul>
 
 <h2 id="open">8. What is still open</h2>
 
