@@ -175,28 +175,51 @@ The ``steering_candidates.yaml`` partitions the locked features into
 three pre-ranked lists (``wrong_pass``, ``wrong_any``, ``caveat``)
 that Stage D will draw from.
 
-### Stage D (deferred): activation steering baseline
+### Stage D: activation steering baseline (now shipped)
 
-A new baseline runner ``scripts/run_baseline_qwen_steered.py``:
+`src/fmllm/representation/steered_llm.py` defines
+``SteeredLLMWrapper``: wraps any chat-style LLM with an
+``ActivationSteerer`` hook that fires on every forward pass during
+generation, adding ``coefficient * decoder_column[fid]`` to the
+residual at the configured layer.
 
-  * Loads Qwen + the trained SAE.
-  * For each held-out specimen, runs Pipeline A with an
-    ``ActivationSteerer`` injecting ``coefficient * decoder[:, fid]``
-    on the same layer the SAE was trained on.
-  * Output to ``runs/holdout/full_steered_<fid>_<coef>/`` so
-    ``evaluate_baselines.sh`` picks it up as a new column.
+`scripts/run_baseline_qwen_steered.py + .sh` runs the full Pipeline
+A on held-out specimens with this wrapped LLM. Output is routed to
+``runs/holdout/full_steered_<fid>_<coef>/<run_id>/`` so the existing
+side-by-side evaluator picks it up as a new column. Multiple
+(fid, coef) experiments coexist in distinct directories.
 
-The expected comparison:
+Recommended workflow:
+
+```
+# 1. Read steering candidates from Stage C
+LATEST=$(ls -td runs/qwen_sae_labels/*/ | head -1)
+cat "${LATEST}/steering_candidates.yaml"
+
+# 2. Pick a wrong-PASS feature, ablate it (negative coefficient)
+FEATURE_IDX=<fid> COEFFICIENT=-2.0 \
+    SPECIMEN_IDS_FILE=runs/holdout_lock/ids.json \
+    bash scripts/run_baseline_qwen_steered.sh
+
+# 3. Re-evaluate
+BASELINES_ROOT=runs/holdout bash scripts/evaluate_baselines.sh
+```
+
+The expected comparison against ``full = 0.695``:
 
 | Hypothesis | Result |
 |---|---|
-| Steering toward a "FM-grounded" feature reduces hallucination | ``full_steered`` PASS-accuracy > ``full`` (0.745) |
-| Steering away from a "confabulation" feature reduces wrong-CAVEAT | ``full_steered`` calibrated_abstention >= ``full`` (0.59) and total wrong drops |
-| No clear feature exists for these behaviours | ``full_steered`` near ``full``, no improvement |
+| Ablating a "wrong-PASS" feature reduces hallucination | ``full_steered`` hallucination_rate < ``full`` (0.255) at unchanged commit_rate |
+| Amplifying a "calibrated abstention" feature shifts more wrong commits to CAVEAT | ``full_steered`` calibrated_abstention > ``full`` (0.59) and total wrong drops |
+| No clear feature exists | ``full_steered`` near ``full``, no improvement |
 
 If Stage D produces a positive result on either axis, Phase 15 is the
-first un-negative result on representation-reading -- because the
-intervention is at the *activation* level, not as prompt evidence.
+first un-negative result on representation-reading on this testbed --
+because the intervention is at the *activation* level, not as prompt
+evidence. (Stages A/B/C with 200-row data may not be enough to find
+the right feature; if all candidates land near ``full``, the signal
+is the data-volume diagnostic, not a refutation of the steering
+recipe.)
 
 ## Where this fits
 

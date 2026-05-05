@@ -43,6 +43,7 @@ from fmllm.representation.llm_sae import (
     resolve_layer_module,
 )
 from fmllm.representation.sae import TopKSAE, build_topk_sae
+from fmllm.representation.steered_llm import SteeredLLMWrapper
 
 __all__ = [
     "ActivationHarvester",
@@ -51,6 +52,7 @@ __all__ = [
     "Intervention",
     "InterventionKind",
     "LLMFeatureLabel",
+    "SteeredLLMWrapper",
     "TopKSAE",
     "audit_feature",
     "build_topk_sae",
