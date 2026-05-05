@@ -181,6 +181,36 @@ def test_generate_cot_inconsistent_branch():
     )
 
 
+def _extract_first_json_object(text: str) -> str:
+    """Return the substring of ``text`` containing the first balanced
+    JSON object. Naive brace counter that respects string literals;
+    good enough for the user-message format here."""
+    start = text.index("{")
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        c = text[i]
+        if escape:
+            escape = False
+            continue
+        if c == "\\":
+            escape = True
+            continue
+        if c == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    raise AssertionError("no balanced JSON object found")
+
+
 def test_build_sft_record_shape():
     truth = {"n": 11, "motif": "triangular_disk", "t": 0.20}
     record = build_sft_record(
@@ -195,12 +225,11 @@ def test_build_sft_record_shape():
     assert roles == ["system", "user", "assistant"]
     # The assistant content must be the rendered CoT text.
     assert "Step 1 - Read the probes:" in record["messages"][2]["content"]
-    # User message must include the probes as JSON so the LLM at
-    # inference time can parse them.
+    # The user message contains the probes payload AND an example
+    # claim shape ({"n_atoms": int, ...}) inside the instruction
+    # prose. Extract the first balanced JSON object specifically.
     user_text = record["messages"][1]["content"]
     assert "PROBES" in user_text
-    payload_start = user_text.index("{")
-    payload_end = user_text.rindex("}") + 1
-    payload = json.loads(user_text[payload_start:payload_end])
+    payload = json.loads(_extract_first_json_object(user_text))
     assert "n_atoms" in payload
     assert "motif" in payload
