@@ -80,10 +80,15 @@ def _load_specimen_ids(splits_path: Path, split_name: str) -> list[int]:
 
 def _truth_dict(h5: h5py.File, sid: int) -> dict[str, object]:
     motif_id = int(np.asarray(h5["motif_ids"][sid]))
-    motif_names = [
-        s.decode() if isinstance(s, bytes) else str(s)
-        for s in (h5.attrs.get("motif_names") or [])
-    ]
+    # h5.attrs["motif_names"] is a numpy array of bytes. Using
+    # `attrs.get(key) or []` triggers numpy's "truth value of an array
+    # is ambiguous" error, so check explicit membership instead.
+    motif_names: list[str] = []
+    if "motif_names" in h5.attrs:
+        motif_names = [
+            s.decode() if isinstance(s, bytes) else str(s)
+            for s in h5.attrs["motif_names"]
+        ]
     motif = (
         motif_names[motif_id]
         if 0 <= motif_id < len(motif_names) else str(motif_id)
@@ -198,6 +203,12 @@ def main(
         f"    coord-consistent : {n_consistent} "
         f"({100.0 * n_consistent / max(n_written, 1):.1f}%)"
     )
+    if n_written == 0:
+        raise typer.BadParameter(
+            "no records were emitted. Inspect the run for upstream "
+            "errors (probe bank failed, FM2 forward failed, HDF5 read "
+            "failed) before running the Stage 2 SFT trainer."
+        )
 
     write_manifest(
         out_dir / "manifest.yaml",
