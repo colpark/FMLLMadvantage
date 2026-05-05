@@ -20,7 +20,11 @@
 #   H5_PATH          (default: data/synthetic_lj_v1/specimens.h5)
 #   OUT_ROOT         (default: runs/eval)
 #   BASELINES_ROOT   (default: runs/baselines)
-#   BASELINES        (default: "naked no_verifier full"; space-separated)
+#   BASELINES        (default: auto-discover any subdir of
+#                     BASELINES_ROOT that has at least one
+#                     */trajectories.jsonl. Override with a
+#                     space-separated list to pin the comparison
+#                     to a specific subset.)
 
 set -euo pipefail
 
@@ -31,7 +35,29 @@ cd "${REPO_ROOT}"
 H5_PATH="${H5_PATH:-data/synthetic_lj_v1/specimens.h5}"
 OUT_ROOT="${OUT_ROOT:-runs/eval}"
 BASELINES_ROOT="${BASELINES_ROOT:-runs/baselines}"
-BASELINES="${BASELINES:-naked no_verifier full}"
+
+# Auto-discover baselines if not pinned: any subdir of BASELINES_ROOT
+# that has at least one */trajectories.jsonl. Sort alphabetically.
+if [ -z "${BASELINES:-}" ]; then
+    DISCOVERED=()
+    if [ -d "${BASELINES_ROOT}" ]; then
+        for d in "${BASELINES_ROOT}"/*/; do
+            d="${d%/}"
+            if compgen -G "${d}/*/trajectories.jsonl" > /dev/null 2>&1; then
+                DISCOVERED+=("$(basename "${d}")")
+            fi
+        done
+    fi
+    if [ "${#DISCOVERED[@]}" -gt 0 ]; then
+        # shellcheck disable=SC2207
+        DISCOVERED=($(printf '%s\n' "${DISCOVERED[@]}" | sort))
+        BASELINES="${DISCOVERED[*]}"
+    else
+        BASELINES="naked no_verifier full"
+    fi
+fi
+echo "==> Baselines to evaluate: ${BASELINES}"
+echo
 
 REPORT_ARGS=()
 EVAL_COUNT=0
