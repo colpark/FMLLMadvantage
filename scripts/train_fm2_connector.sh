@@ -24,6 +24,10 @@
 #   N_QUERY           (default: 32)
 #   GPU               (default: 0)
 #   LLM_MODEL         (default: Qwen/Qwen2.5-7B-Instruct)
+#   SHUFFLE_FEATURES  (default: 0; set to 1 to run the diagnostic
+#                      ablation where FM features are shuffled within
+#                      each batch. Output goes to a separate run-id
+#                      with -shuffled in the slug.)
 
 set -euo pipefail
 
@@ -39,6 +43,12 @@ GRAD_ACCUM="${GRAD_ACCUM:-1}"
 N_QUERY="${N_QUERY:-32}"
 GPU="${GPU:-0}"
 LLM_MODEL="${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
+SHUFFLE_FEATURES="${SHUFFLE_FEATURES:-0}"
+
+EXTRA=()
+if [ "${SHUFFLE_FEATURES}" -eq 1 ]; then
+    EXTRA+=(--shuffle-features)
+fi
 
 echo "==> FM2 connector Stage 1 training"
 echo "    LLM             : ${LLM_MODEL}"
@@ -49,6 +59,7 @@ echo "    LR              : ${LR}"
 echo "    Grad accum      : ${GRAD_ACCUM}"
 echo "    n_query         : ${N_QUERY}"
 echo "    GPU             : ${GPU}"
+echo "    Shuffle features: ${SHUFFLE_FEATURES}"
 echo
 
 CUDA_VISIBLE_DEVICES="${GPU}" uv run python scripts/train_fm2_connector.py \
@@ -58,4 +69,5 @@ CUDA_VISIBLE_DEVICES="${GPU}" uv run python scripts/train_fm2_connector.py \
     --lr "${LR}" \
     --grad-accum "${GRAD_ACCUM}" \
     --n-query "${N_QUERY}" \
-    --llm-model "${LLM_MODEL}"
+    --llm-model "${LLM_MODEL}" \
+    "${EXTRA[@]}"

@@ -238,6 +238,15 @@ def main(
     out: Path = typer.Option(Path("runs/connectors"), "--out", "-o"),
     device: str = typer.Option("auto", "--device"),
     log_every: int = typer.Option(20, "--log-every"),
+    shuffle_features: bool = typer.Option(
+        False, "--shuffle-features/--no-shuffle-features",
+        help="Diagnostic ablation: shuffle FM features within each "
+             "batch so each row sees a random other specimen's features "
+             "paired with its own text. If the loss curve still looks "
+             "like the real run, the connector is not actually using "
+             "FM2's representation. Output goes to a separate run-id "
+             "with the slug -shuffled.",
+    ),
 ) -> None:
     """Train the FM2 connector (Stage 1 alignment)."""
     from transformers import AutoModelForCausalLM, AutoTokenizer  # noqa: PLC0415
@@ -248,12 +257,20 @@ def main(
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    run_id = generate_run_id("fm2-connector-stage1")
+    slug = "fm2-connector-stage1"
+    if shuffle_features:
+        slug += "-shuffled"
+    run_id = generate_run_id(slug)
     out_dir = out / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
     typer.echo(f"==> Run id    : {run_id}")
     typer.echo(f"==> Output    : {out_dir}")
+    if shuffle_features:
+        typer.echo(
+            "==> SHUFFLE ABLATION: FM features will be randomly permuted "
+            "within each batch. Loss values are diagnostic only."
+        )
 
     # FM2 (frozen) ----------------------------------------------------------
     ckpt_dir = sorted(
@@ -355,6 +372,11 @@ def main(
                 fm_features = fm2.encode(rdfs)
                 if device == "cuda":
                     fm_features = fm_features.to(torch.bfloat16)
+                if shuffle_features and fm_features.shape[0] > 1:
+                    perm = torch.randperm(
+                        fm_features.shape[0], device=fm_features.device,
+                    )
+                    fm_features = fm_features[perm]
 
             connector_tokens = connector(fm_features)
             inputs_embeds, labels = _build_inputs(
@@ -446,6 +468,7 @@ def main(
             "grad_accum": grad_accum,
             "max_target_length": max_target_length,
             "seed": seed,
+            "shuffle_features": bool(shuffle_features),
         },
         extra={
             "n_train_specimens": len(pool),
