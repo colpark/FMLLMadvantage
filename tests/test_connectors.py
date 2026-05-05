@@ -171,11 +171,13 @@ def test_annotation_without_positions_drops_geometry():
 def test_annotation_label_dict_round_trip():
     a = annotate_specimen(
         specimen_id=42, n_atoms=11, motif="triangular_disk",
-        temperature=0.4, positions=None,
+        temperature=0.2, positions=None,
     )
     d = annotation_label_dict(a)
     assert d["n_atoms"] == 11
     assert d["motif"] == "triangular_disk"
+    # T=0.2 is below the 0.30 solid-like upper bound (see _T_PHASES);
+    # T in [0.30, 1.00) is liquid-like, T >= 1.00 is gas-like.
     assert d["phase"] == "solid-like"
     assert d["diameter_lj"] is None
     assert d["mean_coordination"] is None
