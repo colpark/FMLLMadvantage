@@ -79,13 +79,24 @@ def _latest_checkpoint_dir(
 
     ``kind`` is ``fm2_rdf`` for the supervised backbone, or
     ``fm2_rdf_ssl`` for the masked-RDF backbone produced by Phase 10.
+    Directories without a ``model.pt`` are skipped: a crashed training
+    run leaves an empty directory behind, and we don't want the next
+    consumer to pick that up by name-sort.
     """
-    candidates = sorted(
+    all_dirs = sorted(
         (checkpoint_root / kind / train_split).glob("*"),
         key=lambda p: p.name,
         reverse=True,
     )
+    candidates = [d for d in all_dirs if (d / "model.pt").exists()]
     if not candidates:
+        if all_dirs:
+            raise typer.BadParameter(
+                f"no completed {kind} checkpoint under "
+                f"{checkpoint_root}/{kind}/{train_split}/. "
+                f"{len(all_dirs)} run-id directories exist but none has "
+                f"model.pt; rerun the trainer."
+            )
         raise typer.BadParameter(
             f"no {kind} checkpoint under "
             f"{checkpoint_root}/{kind}/{train_split}/"

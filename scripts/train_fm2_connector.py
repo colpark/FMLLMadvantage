@@ -287,12 +287,20 @@ def main(
         )
 
     # FM2 (frozen) ----------------------------------------------------------
-    ckpt_dir = sorted(
+    all_dirs = sorted(
         (checkpoint_root / backbone_kind / train_split).glob("*"),
         key=lambda p: p.name,
         reverse=True,
     )
+    ckpt_dir = [d for d in all_dirs if (d / "model.pt").exists()]
     if not ckpt_dir:
+        if all_dirs:
+            raise typer.BadParameter(
+                f"no completed {backbone_kind} checkpoint under "
+                f"{checkpoint_root}/{backbone_kind}/{train_split}/. "
+                f"{len(all_dirs)} run-id directories exist but none has "
+                f"model.pt; rerun the trainer."
+            )
         raise typer.BadParameter(
             f"no {backbone_kind} checkpoint under "
             f"{checkpoint_root}/{backbone_kind}/{train_split}/"
