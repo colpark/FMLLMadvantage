@@ -59,6 +59,7 @@ from fmllm.connectors.text_annotations import (  # noqa: E402
 )
 from fmllm.fms.common import load_checkpoint  # noqa: E402
 from fmllm.fms.fm2_rdf.model import build_fm2_model  # noqa: E402
+from fmllm.fms.fm2_rdf_ssl.model import build_fm2_ssl_model  # noqa: E402
 from fmllm.utils.config import load_config  # noqa: E402
 from fmllm.utils.manifests import write_manifest  # noqa: E402
 from fmllm.utils.run_ids import generate_run_id  # noqa: E402
@@ -247,6 +248,14 @@ def main(
              "FM2's representation. Output goes to a separate run-id "
              "with the slug -shuffled.",
     ),
+    use_ssl: bool = typer.Option(
+        False, "--use-ssl/--no-use-ssl",
+        help="Train the connector on top of the Phase 10 SSL FM2 "
+             "(checkpoints/fm2_rdf_ssl/) instead of the supervised "
+             "FM2. Output goes to a separate run-id with the slug "
+             "-ssl so default-vs-SSL connectors can be compared "
+             "side-by-side.",
+    ),
 ) -> None:
     """Train the FM2 connector (Stage 1 alignment)."""
     from transformers import AutoModelForCausalLM, AutoTokenizer  # noqa: PLC0415
@@ -258,14 +267,19 @@ def main(
     np.random.seed(seed)
 
     slug = "fm2-connector-stage1"
+    if use_ssl:
+        slug += "-ssl"
     if shuffle_features:
         slug += "-shuffled"
     run_id = generate_run_id(slug)
     out_dir = out / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    backbone_kind = "fm2_rdf_ssl" if use_ssl else "fm2_rdf"
+
     typer.echo(f"==> Run id    : {run_id}")
     typer.echo(f"==> Output    : {out_dir}")
+    typer.echo(f"==> Backbone  : {backbone_kind} ({'SSL' if use_ssl else 'supervised'})")
     if shuffle_features:
         typer.echo(
             "==> SHUFFLE ABLATION: FM features will be randomly permuted "
@@ -274,16 +288,18 @@ def main(
 
     # FM2 (frozen) ----------------------------------------------------------
     ckpt_dir = sorted(
-        (checkpoint_root / "fm2_rdf" / train_split).glob("*"),
+        (checkpoint_root / backbone_kind / train_split).glob("*"),
         key=lambda p: p.name,
         reverse=True,
     )
     if not ckpt_dir:
         raise typer.BadParameter(
-            f"no FM2 checkpoint under "
-            f"{checkpoint_root}/fm2_rdf/{train_split}/"
+            f"no {backbone_kind} checkpoint under "
+            f"{checkpoint_root}/{backbone_kind}/{train_split}/"
         )
-    fm2 = build_fm2_model(cfg.fm2).to(device)
+    fm2 = (
+        build_fm2_ssl_model(cfg.fm2) if use_ssl else build_fm2_model(cfg.fm2)
+    ).to(device)
     load_checkpoint(ckpt_dir[0] / "model.pt", model=fm2, map_location=device)
     fm2.eval()
     for p in fm2.parameters():
@@ -425,6 +441,7 @@ def main(
             "n_layers": n_layers,
             "n_heads": n_heads,
             "fm2_checkpoint": str(ckpt_dir[0]),
+            "fm2_kind": backbone_kind,
             "llm_model": llm_model,
             "stage": 1,
         },

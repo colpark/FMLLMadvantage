@@ -19,7 +19,5 @@ One markdown document per pipeline phase. Each document records:
 - `06-rl-finetuning.md` - Phase 6, RL fine-tuning (Pipeline B).
 - `07-evaluation.md` - Phase 7, eight world-model evaluation tests.
 - `08-baselines.md` - Phase 8a, baseline comparison (B0 + B2 + B3) and goal-accuracy metric.
-- `09-connector.md` - Phase 9 scaffolding, FM2 representation connector (Layer C) plus the probing study.
-
-Subsequent integration phases (Phase 9.B, Phase 9.C) add one progress
-document each as those phases land.
+- `09-connector.md` - Phase 9 scaffolding, FM2 representation connector (Layer C) plus the probing study. Closed with a documented negative result.
+- `10-ssl-fm2.md` - Phase 10 scaffolding, self-supervised FM2 backbone with masked-RDF reconstruction (Layer D).

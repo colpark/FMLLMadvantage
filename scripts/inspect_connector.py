@@ -49,6 +49,7 @@ from fmllm.connectors.text_annotations import (  # noqa: E402
 )
 from fmllm.fms.common import load_checkpoint  # noqa: E402
 from fmllm.fms.fm2_rdf.model import build_fm2_model  # noqa: E402
+from fmllm.fms.fm2_rdf_ssl.model import build_fm2_ssl_model  # noqa: E402
 from fmllm.utils.config import load_config  # noqa: E402
 
 
@@ -153,14 +154,20 @@ def main(
     payload = torch.load(connector_path, map_location=device, weights_only=False)
     fm2_ckpt = Path(payload["fm2_checkpoint"]) / "model.pt"
     llm_model_name = payload["llm_model"]
+    fm2_kind = payload.get("fm2_kind", "fm2_rdf")
 
-    # FM2 (frozen).
-    fm2 = build_fm2_model(cfg.fm2).to(device)
+    # FM2 (frozen). Use the same backbone kind the connector was
+    # trained against; older connectors without a kind field are
+    # treated as the supervised FM2.
+    if fm2_kind == "fm2_rdf_ssl":
+        fm2 = build_fm2_ssl_model(cfg.fm2).to(device)
+    else:
+        fm2 = build_fm2_model(cfg.fm2).to(device)
     load_checkpoint(fm2_ckpt, model=fm2, map_location=device)
     fm2.eval()
     for p in fm2.parameters():
         p.requires_grad = False
-    typer.echo(f"==> FM2 ckpt  : {fm2_ckpt}")
+    typer.echo(f"==> FM2 ckpt  : {fm2_ckpt} ({fm2_kind})")
 
     # LLM (frozen).
     typer.echo(f"==> Loading LLM: {llm_model_name}")

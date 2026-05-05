@@ -60,6 +60,7 @@ from fmllm.connectors.text_annotations import (  # noqa: E402
 )
 from fmllm.fms.common import load_checkpoint  # noqa: E402
 from fmllm.fms.fm2_rdf.model import build_fm2_model  # noqa: E402
+from fmllm.fms.fm2_rdf_ssl.model import build_fm2_ssl_model  # noqa: E402
 from fmllm.utils.config import load_config  # noqa: E402
 from fmllm.utils.manifests import write_manifest  # noqa: E402
 from fmllm.utils.run_ids import generate_run_id  # noqa: E402
@@ -72,18 +73,22 @@ _PHASE_TO_LABEL = {"solid-like": 0, "liquid-like": 1, "gas-like": 2}
 
 
 def _latest_checkpoint_dir(
-    checkpoint_root: Path, train_split: str,
+    checkpoint_root: Path, train_split: str, kind: str = "fm2_rdf",
 ) -> Path:
-    """Find the latest run-id under ``checkpoints/fm2_rdf/<train_split>/``."""
+    """Find the latest run-id under ``checkpoints/<kind>/<train_split>/``.
+
+    ``kind`` is ``fm2_rdf`` for the supervised backbone, or
+    ``fm2_rdf_ssl`` for the masked-RDF backbone produced by Phase 10.
+    """
     candidates = sorted(
-        (checkpoint_root / "fm2_rdf" / train_split).glob("*"),
+        (checkpoint_root / kind / train_split).glob("*"),
         key=lambda p: p.name,
         reverse=True,
     )
     if not candidates:
         raise typer.BadParameter(
-            f"no FM2 checkpoint under "
-            f"{checkpoint_root}/fm2_rdf/{train_split}/"
+            f"no {kind} checkpoint under "
+            f"{checkpoint_root}/{kind}/{train_split}/"
         )
     return candidates[0]
 
@@ -342,24 +347,37 @@ def main(
     seed: int = typer.Option(0, "--seed"),
     out: Path = typer.Option(Path("runs/probes"), "--out", "-o"),
     device: str = typer.Option("auto", "--device"),
+    use_ssl: bool = typer.Option(
+        False, "--use-ssl/--no-use-ssl",
+        help="Probe the SSL backbone (Phase 10) instead of the "
+             "supervised FM2. Loads from checkpoints/fm2_rdf_ssl/ "
+             "and uses build_fm2_ssl_model.",
+    ),
 ) -> None:
     """Run the FM2 probing study and write a YAML report."""
     cfg = load_config(config)
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    run_id = generate_run_id(f"fm2-probes-{probe_arch}")
+    backbone_kind = "fm2_rdf_ssl" if use_ssl else "fm2_rdf"
+    slug_kind = "ssl" if use_ssl else "supervised"
+    run_id = generate_run_id(f"fm2-probes-{slug_kind}-{probe_arch}")
     out_dir = out / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
     typer.echo(f"==> Run id        : {run_id}")
     typer.echo(f"==> Output        : {out_dir}")
-    typer.echo(f"==> Train split   : {train_split} (FM2 was trained on this)")
+    typer.echo(f"==> Train split   : {train_split}")
+    typer.echo(f"==> Backbone kind : {backbone_kind} ({slug_kind})")
     typer.echo(f"==> Probe split   : {probe_split}")
 
-    # Load FM2 from the latest checkpoint and freeze it.
-    ckpt_dir = _latest_checkpoint_dir(checkpoint_root, train_split)
-    model = build_fm2_model(cfg.fm2).to(device)
+    # Load the requested backbone from the latest checkpoint and freeze it.
+    ckpt_dir = _latest_checkpoint_dir(
+        checkpoint_root, train_split, kind=backbone_kind,
+    )
+    model = (
+        build_fm2_ssl_model(cfg.fm2) if use_ssl else build_fm2_model(cfg.fm2)
+    ).to(device)
     load_checkpoint(ckpt_dir / "model.pt", model=model, map_location=device)
     for p in model.parameters():
         p.requires_grad = False
@@ -398,6 +416,7 @@ def main(
         "run_id": run_id,
         "timestamp_utc": datetime.now(UTC).isoformat(),
         "checkpoint": str(ckpt_dir),
+        "backbone_kind": backbone_kind,
         "probe_split": probe_split,
         "n_specimens": len(ids_all),
         "feature_dim": int(features.shape[1]),

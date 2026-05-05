@@ -28,6 +28,12 @@
 #                      ablation where FM features are shuffled within
 #                      each batch. Output goes to a separate run-id
 #                      with -shuffled in the slug.)
+#   USE_SSL           (default: 0; set to 1 to train the connector
+#                      on top of the Phase 10 SSL FM2 backbone.
+#                      Requires that scripts/train_fm2_ssl.sh has run
+#                      and produced a checkpoint under
+#                      checkpoints/fm2_rdf_ssl/. Output goes to a
+#                      separate run-id with -ssl in the slug.)
 
 set -euo pipefail
 
@@ -44,10 +50,14 @@ N_QUERY="${N_QUERY:-32}"
 GPU="${GPU:-0}"
 LLM_MODEL="${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
 SHUFFLE_FEATURES="${SHUFFLE_FEATURES:-0}"
+USE_SSL="${USE_SSL:-0}"
 
 EXTRA=()
 if [ "${SHUFFLE_FEATURES}" -eq 1 ]; then
     EXTRA+=(--shuffle-features)
+fi
+if [ "${USE_SSL}" -eq 1 ]; then
+    EXTRA+=(--use-ssl)
 fi
 
 echo "==> FM2 connector Stage 1 training"
@@ -60,6 +70,7 @@ echo "    Grad accum      : ${GRAD_ACCUM}"
 echo "    n_query         : ${N_QUERY}"
 echo "    GPU             : ${GPU}"
 echo "    Shuffle features: ${SHUFFLE_FEATURES}"
+echo "    Use SSL backbone: ${USE_SSL}"
 echo
 
 CUDA_VISIBLE_DEVICES="${GPU}" uv run python scripts/train_fm2_connector.py \
