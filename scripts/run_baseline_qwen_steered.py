@@ -181,11 +181,32 @@ def main(
         if specimen_ids_file is not None
         else f"baseline-{baseline_label}-{len(specimen_ids)}"
     )
-    run_id = generate_run_id(run_slug)
-    out_dir = out / baseline_label / run_id
-    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Resume detection: find the latest non-empty trajectories.jsonl
+    # under out / baseline_label / *. If the container died mid-run
+    # (the holdout server periodically recycles), we want to resume
+    # rather than waste the partial work.
+    base_subdir = out / baseline_label
+    resume_dir: Path | None = None
+    if base_subdir.exists():
+        for d in sorted(base_subdir.iterdir(), key=lambda p: p.name, reverse=True):
+            jsonl = d / "trajectories.jsonl"
+            if jsonl.exists() and jsonl.stat().st_size > 0:
+                resume_dir = d
+                break
+
+    if resume_dir is not None:
+        out_dir = resume_dir
+        run_id = resume_dir.name
+        run_mode = "resume"
+    else:
+        run_id = generate_run_id(run_slug)
+        out_dir = out / baseline_label / run_id
+        out_dir.mkdir(parents=True, exist_ok=True)
+        run_mode = "fresh"
     configure_logging(out_dir)
 
+    typer.echo(f"==> Run mode    : {run_mode}")
     typer.echo(f"==> Run id      : {run_id}")
     typer.echo(f"==> Output      : {out_dir}")
     typer.echo(f"==> SAE dir     : {sae_dir}")
@@ -237,6 +258,7 @@ def main(
         progress_every=10,            # log every 10 specimens so the
                                        # steered run shows progress
                                        # well before specimen 50.
+        resume=(run_mode == "resume"),
     )
 
     write_manifest(

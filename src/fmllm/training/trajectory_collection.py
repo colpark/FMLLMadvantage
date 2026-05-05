@@ -58,6 +58,7 @@ def collect_trajectories(
     sources_config: SourcesConfig | None = None,
     filter_passing: bool = False,
     progress_every: int = 50,
+    resume: bool = False,
 ) -> dict[str, Any]:
     """Run the OHVD loop on each specimen and write the trajectories to JSONL.
 
@@ -76,6 +77,11 @@ def collect_trajectories(
         filter_passing: When True, only verifier-PASS trajectories
             land in the JSONL. The summary still records the totals.
         progress_every: Log a progress line after every N specimens.
+        resume: When True and ``out_dir / 'trajectories.jsonl'``
+            already exists, scan it for completed specimen_ids,
+            skip those, and append the new trajectories. When False
+            (default), the file is overwritten -- this matches the
+            original behavior.
 
     Returns:
         A summary dict with ``run_id``, ``out_dir``, counts by
@@ -106,14 +112,40 @@ def collect_trajectories(
         sources_config=sources_config,
     )
 
+    # Resume support: scan the existing trajectories.jsonl, drop the
+    # specimen_ids we already have, and reopen in append mode.
+    done_sids: set[int] = set()
+    if resume and jsonl_path.exists() and jsonl_path.stat().st_size > 0:
+        import json as _json
+        with jsonl_path.open("r") as _existing:
+            for line in _existing:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = _json.loads(line)
+                except _json.JSONDecodeError:
+                    continue
+                sid_existing = obj.get("specimen_id")
+                if isinstance(sid_existing, int):
+                    done_sids.add(sid_existing)
+        logger.info(
+            "Resume mode: {} specimens already in trajectories.jsonl; skipping.",
+            len(done_sids),
+        )
+
     logger.info(
-        "Trajectory collection: out={}, max_steps={}, filter_passing={}",
-        out_dir, max_steps, filter_passing,
+        "Trajectory collection: out={}, max_steps={}, filter_passing={}, resume={}",
+        out_dir, max_steps, filter_passing, resume,
     )
 
-    with jsonl_path.open("w") as f:
+    write_mode = "a" if (resume and done_sids) else "w"
+    with jsonl_path.open(write_mode) as f:
         for sid in specimen_ids:
-            traj = loop.run(query=query, specimen_id=int(sid))
+            sid_int = int(sid)
+            if sid_int in done_sids:
+                continue
+            traj = loop.run(query=query, specimen_id=sid_int)
             counters["total"] += 1
 
             term = traj.termination.value
