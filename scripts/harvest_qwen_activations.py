@@ -246,7 +246,17 @@ def main(
     for p in model.parameters():
         p.requires_grad = False
 
-    base_for_hook = model.base_model.model if hasattr(model, "base_model") else model
+    # PEFT wraps the LM as ``PeftModel.base_model.model`` (where the
+    # outer ``base_model`` is a LoraModel and its ``.model`` is the
+    # actual ``Qwen2ForCausalLM``). Plain HF models also expose a
+    # ``.base_model`` attribute as a shortcut to the inner transformer,
+    # so ``hasattr(model, "base_model")`` is *not* a reliable PEFT
+    # detector. Use ``peft_config`` instead, which only exists on
+    # PeftModel.
+    is_peft = hasattr(model, "peft_config") and bool(
+        getattr(model, "peft_config", None)
+    )
+    base_for_hook = model.base_model.model if is_peft else model
     layer_module = resolve_layer_module(base_for_hook, layer_path)
     typer.echo(f"==> Hooking     : {type(layer_module).__name__}")
 
