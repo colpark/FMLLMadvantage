@@ -43,6 +43,7 @@ verification baseline*.
 | `07-open-questions-and-bets.md` | Three concrete directions for next research | are choosing what to build next |
 | `08-references.md` | External literature and internal docs | want citations |
 | `09-handover-checklist.md` | First-day playbook | are picking this up cold |
+| `10-literature-by-phase.md` | Phase-by-phase mapping of related literature | want to know how each step relates to prior work |
 
 The progress and audit documents in `docs/progress/` and
 `docs/audits/` contain the per-phase narrative. The handover
