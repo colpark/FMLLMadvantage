@@ -310,7 +310,7 @@ def main(
             "depth": cfg.fm2.depth,
             "num_heads": cfg.fm2.num_heads,
             "mlp_ratio": cfg.fm2.mlp_ratio,
-            "dropout": cfg.fm2.dropout,
+            "dropout": float(getattr(cfg.fm2, "dropout", 0.0)),
             "epochs": epochs,
             "batch_size": batch_size,
             "lr": lr,

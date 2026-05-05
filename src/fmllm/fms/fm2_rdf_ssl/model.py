@@ -148,8 +148,11 @@ def build_fm2_ssl_model(cfg: Any) -> FM2SSLTransformer:
     """Factory that mirrors :func:`fmllm.fms.fm2_rdf.build_fm2_model`.
 
     Reads the same FM2 config block so the SSL and supervised
-    backbones share hyperparameters. That way the connector code
-    (which expects a fixed embedding dim) can drop into either.
+    backbones share hyperparameters. ``FM2Config`` does not currently
+    expose a ``dropout`` field; we honor it when present and fall
+    back to the model default (0.0) otherwise. That way the connector
+    code (which expects a fixed embedding dim) drops into either
+    backbone unchanged.
     """
     return FM2SSLTransformer(
         rdf_bins=int(cfg.rdf_bins),
@@ -157,7 +160,7 @@ def build_fm2_ssl_model(cfg: Any) -> FM2SSLTransformer:
         depth=int(cfg.depth),
         num_heads=int(cfg.num_heads),
         mlp_ratio=float(cfg.mlp_ratio),
-        dropout=float(cfg.dropout),
+        dropout=float(getattr(cfg, "dropout", 0.0)),
     )
 
 
