@@ -20,4 +20,5 @@ One markdown document per pipeline phase. Each document records:
 - `07-evaluation.md` - Phase 7, eight world-model evaluation tests.
 - `08-baselines.md` - Phase 8a, baseline comparison (B0 + B2 + B3) and goal-accuracy metric.
 - `09-connector.md` - Phase 9 scaffolding, FM2 representation connector (Layer C) plus the probing study. Closed with a documented negative result.
-- `10-ssl-fm2.md` - Phase 10 scaffolding, self-supervised FM2 backbone with masked-RDF reconstruction (Layer D).
+- `10-ssl-fm2.md` - Phase 10 scaffolding, self-supervised FM2 backbone with masked-RDF reconstruction (Layer D). Closed with a documented negative result.
+- `11-cot-sft.md` - Phase 11 Stage 2 scaffolding: probe bank, synthetic CoT generator, LoRA SFT bootstrap.

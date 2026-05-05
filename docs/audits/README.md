@@ -18,5 +18,6 @@ check pass / fail / fixed, and signs off only when every check passes.
 - `08-baselines-audit.md` - Phase 8a audit.
 - `09-connector-audit.md` - Phase 9 scaffolding audit (probes + Stage 1 alignment).
 - `10-ssl-fm2-audit.md` - Phase 10 scaffolding audit (masked-RDF SSL backbone).
+- `11-cot-sft-audit.md` - Phase 11 Stage 2 scaffolding audit (probe bank + synthetic CoT + SFT).
 
 Subsequent phases add one audit report each.
