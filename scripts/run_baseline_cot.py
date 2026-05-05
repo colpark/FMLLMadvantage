@@ -182,8 +182,25 @@ def main(
         help="JSON list of specimen IDs to run; overrides --start/--count.",
     ),
     out: Path = typer.Option(Path("runs/holdout"), "--out", "-o"),
-    max_new_tokens: int = typer.Option(384, "--max-new-tokens"),
-    batch_size: int = typer.Option(64, "--batch-size"),
+    max_new_tokens: int = typer.Option(
+        256, "--max-new-tokens",
+        help="Cap on tokens generated per specimen. Lower = less KV "
+             "cache pressure. The trained CoTs land at ~200 tokens, "
+             "so 256 is a safe default. Drop to 192 if you're "
+             "memory-constrained.",
+    ),
+    batch_size: int = typer.Option(
+        16, "--batch-size",
+        help="FM2 forward batch size. Lower = less peak memory on "
+             "the FM2 encode step. Generation is one specimen at a "
+             "time regardless of this.",
+    ),
+    quantize: str = typer.Option(
+        "none", "--quantize",
+        help="LLM quantization mode: 'none' (bf16, ~14GB), '8bit' "
+             "(bitsandbytes 8-bit, ~7GB), '4bit' (bitsandbytes 4-bit, "
+             "~4GB). 4bit is the right default if your pod has <16GB.",
+    ),
     device: str = typer.Option("auto", "--device"),
     log_every: int = typer.Option(
         10, "--log-every",
@@ -226,9 +243,45 @@ def main(
         specimen_ids = list(range(start, start + count))
         run_slug = f"baseline-cot-sft-{count}"
 
-    run_id = generate_run_id(run_slug)
-    out_dir = out / "cot_sft" / run_id
-    out_dir.mkdir(parents=True, exist_ok=True)
+    # Resume: if a previous run-id directory under runs/holdout/cot_sft/
+    # has a non-empty trajectories.jsonl, count the specimen IDs already
+    # processed and skip them. Lets the user re-launch after an OOM
+    # without redoing work.
+    resume_already_done: set[int] = set()
+    resume_dir: Path | None = None
+    cot_root = out / "cot_sft"
+    if cot_root.exists():
+        for d in sorted(cot_root.iterdir(), key=lambda p: p.name, reverse=True):
+            jsonl = d / "trajectories.jsonl"
+            if jsonl.exists() and jsonl.stat().st_size > 0:
+                resume_dir = d
+                with jsonl.open("r") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            obj = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        sid = obj.get("specimen_id")
+                        if isinstance(sid, int):
+                            resume_already_done.add(sid)
+                break
+
+    if resume_already_done and resume_dir is not None:
+        out_dir = resume_dir
+        run_id = resume_dir.name
+        run_mode = "resume"
+        typer.echo(
+            f"==> Resuming run {run_id} ({len(resume_already_done)} "
+            f"specimens already processed)"
+        )
+    else:
+        run_id = generate_run_id(run_slug)
+        out_dir = out / "cot_sft" / run_id
+        out_dir.mkdir(parents=True, exist_ok=True)
+        run_mode = "fresh"
 
     typer.echo(f"==> Run id      : {run_id}")
     typer.echo(f"==> Output      : {out_dir}")
@@ -247,15 +300,34 @@ def main(
 
     bank = ProbeBank.load(probe_bank_dir, device=device).eval()
 
-    typer.echo("==> Loading LLM + adapter...")
+    typer.echo(f"==> Loading LLM + adapter (quantize={quantize})...")
     tokenizer = AutoTokenizer.from_pretrained(base_model)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
-    base_llm = AutoModelForCausalLM.from_pretrained(
-        base_model,
-        torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32,
-        device_map=device,
-    )
+
+    load_kwargs: dict = {"device_map": device}
+    if quantize == "4bit":
+        from transformers import BitsAndBytesConfig  # noqa: PLC0415
+
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+        )
+    elif quantize == "8bit":
+        from transformers import BitsAndBytesConfig  # noqa: PLC0415
+
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
+    elif quantize == "none":
+        load_kwargs["torch_dtype"] = (
+            torch.bfloat16 if device == "cuda" else torch.float32
+        )
+    else:
+        raise typer.BadParameter(
+            f"--quantize must be one of none/8bit/4bit, got {quantize!r}"
+        )
+    base_llm = AutoModelForCausalLM.from_pretrained(base_model, **load_kwargs)
     llm = PeftModel.from_pretrained(
         base_llm, str(adapter_path), is_trainable=False,
     )
@@ -274,14 +346,21 @@ def main(
         "total": 0,
         "committed": 0,
         "parse_failure": 0,
+        "skipped_resume": 0,
     }
     started_run = _now_utc()
-    typer.echo("==> Starting generation (one specimen at a time)")
+
+    # Filter the work list to the specimens not already processed.
+    todo = [s for s in specimen_ids if int(s) not in resume_already_done]
+    counters["skipped_resume"] = len(specimen_ids) - len(todo)
+
+    typer.echo(f"==> Starting generation ({run_mode}, {len(todo)} to do)")
     typer.echo("")
 
-    with h5py.File(h5_path, "r") as h5, jsonl_path.open("w") as out_f:
-        for start_i in range(0, len(specimen_ids), batch_size):
-            batch_ids = specimen_ids[start_i : start_i + batch_size]
+    write_mode = "a" if run_mode == "resume" else "w"
+    with h5py.File(h5_path, "r") as h5, jsonl_path.open(write_mode) as out_f:
+        for start_i in range(0, len(todo), batch_size):
+            batch_ids = todo[start_i : start_i + batch_size]
             rdfs_np = np.stack(
                 [np.asarray(h5["rdfs"][i]) for i in batch_ids], axis=0,
             ).astype(np.float32)
@@ -370,15 +449,23 @@ def main(
                 out_f.write(traj.model_dump_json() + "\n")
                 out_f.flush()
 
+                # Free generation tensors before the next iteration.
+                # Without this, deterministic decoding's KV cache + the
+                # sampled output tensor accumulate on a long loop and
+                # the pod gets OOM-killed.
+                del out_ids, gen_ids, inputs
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+
                 # Per-specimen progress so the user sees movement
                 # rather than a blank screen between batch boundaries.
                 if (
                     counters["total"] == 1
                     or counters["total"] % log_every == 0
-                    or counters["total"] == len(specimen_ids)
+                    or counters["total"] == len(todo)
                 ):
                     typer.echo(
-                        f"    {counters['total']:>4}/{len(specimen_ids)} "
+                        f"    {counters['total']:>4}/{len(todo)} "
                         f"sid={int(sid):<6} "
                         f"committed={counters['committed']} "
                         f"parse_failure={counters['parse_failure']}"

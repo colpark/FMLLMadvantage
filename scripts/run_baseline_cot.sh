@@ -26,6 +26,12 @@
 #   BASE_MODEL         (default: Qwen/Qwen2.5-7B-Instruct)
 #   ADAPTER_PATH       (default: latest under checkpoints/cot-sft/)
 #   PROBE_BANK_DIR     (default: latest under checkpoints/probes/)
+#   QUANTIZE           (default: 4bit; 'none' for bf16, '8bit' for
+#                       8-bit. 4bit drops Qwen's GPU memory from
+#                       ~14GB to ~4GB. Use 'none' if you have ample
+#                       memory and want full-precision generation.)
+#   MAX_NEW_TOKENS     (default: 256)
+#   BATCH_SIZE         (default: 16; FM2 forward batch only)
 
 set -euo pipefail
 
@@ -38,8 +44,14 @@ COUNT="${COUNT:-200}"
 OUT_ROOT="${OUT_ROOT:-runs/holdout}"
 GPU="${GPU:-0}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
+QUANTIZE="${QUANTIZE:-4bit}"
+MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-256}"
+BATCH_SIZE="${BATCH_SIZE:-16}"
 
 EXTRA=()
+EXTRA+=(--quantize "${QUANTIZE}")
+EXTRA+=(--max-new-tokens "${MAX_NEW_TOKENS}")
+EXTRA+=(--batch-size "${BATCH_SIZE}")
 if [ -n "${SPECIMEN_IDS_FILE:-}" ]; then
     EXTRA+=(--specimen-ids-file "${SPECIMEN_IDS_FILE}")
 fi
@@ -55,6 +67,9 @@ echo "    Start         : ${START}"
 echo "    Count         : ${COUNT}"
 echo "    Output root   : ${OUT_ROOT}"
 echo "    Base model    : ${BASE_MODEL}"
+echo "    Quantize      : ${QUANTIZE}"
+echo "    Max new tokens: ${MAX_NEW_TOKENS}"
+echo "    Batch size    : ${BATCH_SIZE}"
 echo "    GPU           : ${GPU}"
 echo
 
