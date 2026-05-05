@@ -119,7 +119,20 @@ _SYSTEM_PROMPT = (
 )
 
 
-def _user_message(probe_outputs: dict[str, dict[str, Any]]) -> str:
+def _format_sae_feature_dict(
+    sae_features: list[tuple[str, float]] | None,
+) -> str:
+    """Render a list of (label, activation) tuples as a JSON-like string."""
+    if not sae_features:
+        return ""
+    items = [f'"{lab}": {float(act):.2f}' for lab, act in sae_features]
+    return "{" + ", ".join(items) + "}"
+
+
+def _user_message(
+    probe_outputs: dict[str, dict[str, Any]],
+    sae_features: list[tuple[str, float]] | None = None,
+) -> str:
     """The user message the LLM sees at training and inference time."""
     payload = {
         name: {
@@ -128,19 +141,32 @@ def _user_message(probe_outputs: dict[str, dict[str, Any]]) -> str:
         }
         for name, value in probe_outputs.items()
     }
-    return (
+    parts: list[str] = [
         "PROBES (each derived from a frozen FM head on this specimen): "
-        f"{json.dumps(payload, sort_keys=True)}\n\n"
+        f"{json.dumps(payload, sort_keys=True)}",
+    ]
+    sae_payload = _format_sae_feature_dict(sae_features)
+    if sae_payload:
+        parts.append("")
+        parts.append(
+            "SAE_FEATURES (top-k labelled directions in the FM "
+            "representation that activated on this specimen): "
+            f"{sae_payload}"
+        )
+    parts.append("")
+    parts.append(
         "Reason through the evidence step by step, cross-check the "
         "probes against each other, then commit a final JSON claim of "
         "the form {\"n_atoms\": int, \"motif\": str, \"temperature\": float}."
     )
+    return "\n".join(parts)
 
 
 def generate_cot(
     *,
     probe_outputs: dict[str, dict[str, Any]],
     ground_truth: dict[str, Any],
+    sae_features: list[tuple[str, float]] | None = None,
 ) -> SyntheticCoT:
     """Render a deterministic templated reasoning chain.
 
@@ -191,6 +217,15 @@ def generate_cot(
             f"  - RDF first peak  : "
             f"{float(peak_pred['prediction']):.2f} LJ units"
         )
+
+    if sae_features:
+        lines.append("")
+        lines.append(
+            "Step 1b - Read the SAE-derived features (auto-discovered "
+            "directions in the FM representation, with correlation labels):"
+        )
+        for lab, act in sae_features[:8]:        # cap rendered count
+            lines.append(f"  - {lab} (activation {float(act):.2f})")
 
     lines.append("")
     lines.append("Step 2 - Cross-check coordination against the structural guess:")
@@ -253,24 +288,34 @@ def build_sft_record(
     probe_outputs: dict[str, dict[str, Any]],
     ground_truth: dict[str, Any],
     specimen_id: int,
+    sae_features: list[tuple[str, float]] | None = None,
 ) -> dict[str, Any]:
     """Assemble the (system, user, assistant) chat record consumed by
     Phase 6's SFT trainer.
 
     The trainer expects a top-level ``messages`` list. Additional
     fields are kept for traceability but ignored by training.
+
+    When ``sae_features`` is provided, both the user message (input
+    seen at training and inference) and the assistant CoT chain
+    reference the SAE feature labels and activations explicitly.
     """
-    cot = generate_cot(probe_outputs=probe_outputs, ground_truth=ground_truth)
+    cot = generate_cot(
+        probe_outputs=probe_outputs,
+        ground_truth=ground_truth,
+        sae_features=sae_features,
+    )
     return {
         "specimen_id": int(specimen_id),
         "messages": [
             {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": _user_message(probe_outputs)},
+            {"role": "user", "content": _user_message(probe_outputs, sae_features)},
             {"role": "assistant", "content": cot.text},
         ],
         "ground_truth": cot.final_claim,
         "cot_consistent": cot.consistent,
         "expected_coordination": cot.expected_coordination,
+        "sae_features_count": (len(sae_features) if sae_features else 0),
     }
 
 

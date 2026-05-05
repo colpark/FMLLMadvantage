@@ -25,3 +25,4 @@ One markdown document per pipeline phase. Each document records:
 - `13-sae.md` - Phase 13 scaffolding: Top-K SAE on FM2 CLS + correlation-based feature labelling + injection into Pipeline A's prompt.
 - `14-sae-causal.md` - Phase 14 scaffolding: counterfactual causal audit of SAE features against FM2's energy head + ``full_sae_causal`` baseline that surfaces only causally meaningful features.
 - `15-qwen-sae.md` - Phase 15 Stage A + Stage B scaffolding: hooking primitives for Qwen residual stream + harvesting CLI + Top-K SAE trainer (the Templeton et al. / Golden Gate Claude analog). Stages C (labelling) and D (steered baseline) deferred.
+- `16-cot-sft-with-sae.md` - Phase 16 scaffolding: SAE-augmented CoT-SFT (probes + SAE features in training records) plus a probe-head reference baseline (FM2 + probes, no LLM). Asks whether training-time rich evidence beats the FM's own head, no verifier in scope.

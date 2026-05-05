@@ -233,3 +233,84 @@ def test_build_sft_record_shape():
     payload = json.loads(_extract_first_json_object(user_text))
     assert "n_atoms" in payload
     assert "motif" in payload
+
+
+# ---------------------------------------------------------------------------
+# Phase 16: synthetic CoT with SAE features
+# ---------------------------------------------------------------------------
+
+
+def test_generate_cot_with_sae_features_renders_step_1b():
+    """When sae_features is provided, the rendered CoT contains a
+    Step 1b section listing each labelled SAE feature."""
+    truth = {"n": 11, "motif": "triangular_disk", "t": 0.20}
+    sae = [
+        ("f6844: motif=triangular_disk + phase=solid-like", 2.13),
+        ("f4741: motif=triangular_disk", 1.78),
+    ]
+    cot = generate_cot(
+        probe_outputs=_example_probes(),
+        ground_truth=truth,
+        sae_features=sae,
+    )
+    assert "Step 1b" in cot.text
+    assert "f6844" in cot.text
+    assert "f4741" in cot.text
+    assert "2.13" in cot.text
+    assert "Step 2" in cot.text     # downstream sections still rendered
+
+
+def test_generate_cot_without_sae_features_omits_step_1b():
+    truth = {"n": 11, "motif": "triangular_disk", "t": 0.20}
+    cot = generate_cot(
+        probe_outputs=_example_probes(),
+        ground_truth=truth,
+    )
+    assert "Step 1b" not in cot.text
+
+
+def test_build_sft_record_with_sae_features_appears_in_user_message():
+    """The user message (the LLM's *input* at training and inference)
+    must contain the SAE_FEATURES payload when sae_features is passed."""
+    truth = {"n": 11, "motif": "triangular_disk", "t": 0.20}
+    sae = [
+        ("f6844: motif=triangular_disk + phase=solid-like", 2.13),
+        ("f4741: motif=triangular_disk", 1.78),
+    ]
+    record = build_sft_record(
+        probe_outputs=_example_probes(),
+        ground_truth=truth,
+        specimen_id=42,
+        sae_features=sae,
+    )
+    user_text = record["messages"][1]["content"]
+    assert "PROBES" in user_text
+    assert "SAE_FEATURES" in user_text
+    assert "f6844" in user_text
+    assert record["sae_features_count"] == 2
+
+
+def test_generate_cot_is_deterministic_with_sae_features():
+    truth = {"n": 11, "motif": "triangular_disk", "t": 0.20}
+    sae = [("f10: motif=ring", 1.5), ("f20: T-cold(r=-0.40)", 0.9)]
+    a = generate_cot(
+        probe_outputs=_example_probes(), ground_truth=truth, sae_features=sae,
+    )
+    b = generate_cot(
+        probe_outputs=_example_probes(), ground_truth=truth, sae_features=sae,
+    )
+    assert a.text == b.text
+    assert a.final_claim == b.final_claim
+
+
+def test_build_sft_record_commit_uses_ground_truth_with_sae():
+    """SAE features must not override the ground-truth final_claim."""
+    truth = {"n": 11, "motif": "triangular_disk", "t": 0.20}
+    sae = [("f10: motif=ring", 5.0)]    # misleading SAE label
+    record = build_sft_record(
+        probe_outputs=_example_probes(),
+        ground_truth=truth,
+        specimen_id=42,
+        sae_features=sae,
+    )
+    assert record["ground_truth"]["motif"] == "triangular_disk"
