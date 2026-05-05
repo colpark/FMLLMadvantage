@@ -43,7 +43,18 @@ def train_sft(
 
     Lazy-imports transformers and datasets so this module loads
     cleanly without those packages installed locally.
+
+    Multi-GPU: when launched via ``torchrun --nproc_per_node=N``,
+    the trainer detects LOCAL_RANK / WORLD_SIZE and switches to
+    DistributedDataParallel mode (one model copy per GPU, gradients
+    synchronized across the group). With ``device_map='auto'`` the
+    HuggingFace accelerate path would shard the model across GPUs --
+    which is the wrong choice for a 7B-class model that fits on one
+    80GB H100. We use per-rank ``device_map={"": local_rank}`` so
+    every rank holds a full copy. The Trainer's DDP wiring is
+    automatic from there.
     """
+    import os                            # noqa: PLC0415
     import torch  # noqa: PLC0415
     from datasets import Dataset  # noqa: PLC0415
     from transformers import (  # noqa: PLC0415
@@ -61,10 +72,23 @@ def train_sft(
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
 
+    local_rank_env = os.environ.get("LOCAL_RANK")
+    world_size_env = os.environ.get("WORLD_SIZE", "1")
+    is_distributed = (
+        local_rank_env is not None
+        and int(local_rank_env) >= 0
+        and int(world_size_env) > 1
+    )
+    if is_distributed:
+        local_rank = int(local_rank_env)
+        device_map: Any = {"": local_rank}
+    else:
+        device_map = "auto"
+
     base_model = AutoModelForCausalLM.from_pretrained(
         base_model_name,
         torch_dtype=torch.bfloat16 if bf16 else torch.float32,
-        device_map="auto",
+        device_map=device_map,
     )
     model = apply_lora(
         base_model,
@@ -117,7 +141,7 @@ def train_sft(
         remove_columns=list(sft_records[0].keys()),
     )
 
-    args = TrainingArguments(
+    args_kwargs: dict[str, Any] = dict(
         output_dir=str(output_dir / "trainer"),
         num_train_epochs=num_train_epochs,
         per_device_train_batch_size=per_device_train_batch_size,
@@ -130,10 +154,18 @@ def train_sft(
         report_to=[],
         seed=seed,
         gradient_checkpointing=gradient_checkpointing,
-        gradient_checkpointing_kwargs={"use_reentrant": False} if gradient_checkpointing else None,
+        gradient_checkpointing_kwargs=(
+            {"use_reentrant": False} if gradient_checkpointing else None
+        ),
         # Bound memory growth from peak allocations on Hopper.
         optim="adamw_torch",
     )
+    if is_distributed:
+        # Gradient checkpointing + LoRA can produce parameters that
+        # appear unused in the autograd graph for some batches; tell
+        # DDP to handle that gracefully rather than erroring out.
+        args_kwargs["ddp_find_unused_parameters"] = True
+    args = TrainingArguments(**args_kwargs)
     collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
     trainer = Trainer(
