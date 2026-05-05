@@ -11,13 +11,32 @@ existing PROBES payload.
 Submodules:
     sae        TopKSAE module
     labels     correlation-based feature labelling
+    causal     counterfactual interventions on SAE features (Phase 14)
 
 The architectural goal is the (input, representation, probe_outputs)
 triangle: probes already cover the rep -> probe_outputs edge; this
 module adds the rep -> text-label edge so the LLM can reason about
-representation structure that probes don't pre-specify.
+representation structure that probes don't pre-specify. Phase 14
+adds the rep -> causal-effect edge so the labels we feed the LLM
+are grounded in interventional rather than purely correlational
+evidence.
 """
 
+from fmllm.representation.causal import (
+    CausalEffect,
+    Intervention,
+    InterventionKind,
+    audit_feature,
+    filter_features_by_causal_effect,
+)
 from fmllm.representation.sae import TopKSAE, build_topk_sae
 
-__all__ = ["TopKSAE", "build_topk_sae"]
+__all__ = [
+    "CausalEffect",
+    "Intervention",
+    "InterventionKind",
+    "TopKSAE",
+    "audit_feature",
+    "build_topk_sae",
+    "filter_features_by_causal_effect",
+]

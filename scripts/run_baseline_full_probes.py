@@ -157,12 +157,22 @@ def _format_sae_features(
     activations: "np.ndarray",       # (hidden_dim,)
     labels: dict[int, str],
     top_k_prompt: int,
+    causal_filter: set[int] | None = None,
 ) -> str:
     """Take the top-k active features for a specimen and render their
-    labels + activation values as a compact string."""
+    labels + activation values as a compact string.
+
+    When ``causal_filter`` is provided, restricts the candidate
+    feature set to those indices first; this is the Phase 14 path
+    that surfaces only causally meaningful features to the LLM.
+    """
     if activations.size == 0:
         return ""
     nonzero_idx = np.nonzero(activations)[0]
+    if causal_filter is not None:
+        nonzero_idx = np.array(
+            [i for i in nonzero_idx if int(i) in causal_filter], dtype=np.int64,
+        )
     if nonzero_idx.size == 0:
         return ""
     nonzero_acts = activations[nonzero_idx]
@@ -213,6 +223,14 @@ def main(
         8, "--sae-top-k-prompt",
         help="How many top-active SAE features to surface per specimen.",
     ),
+    causal_filter_path: Path | None = typer.Option(
+        None, "--causal-filter-path",
+        help="Path to a causal_filter.json from scripts/sae_causal_audit.py. "
+             "When set, only feature indices listed under "
+             "passing_feature_ids are eligible for the SAE prompt slot. "
+             "Output then goes to runs/holdout/full_sae_causal/ instead "
+             "of runs/holdout/full_sae/.",
+    ),
     base_model: str = typer.Option(
         "Qwen/Qwen2.5-7B-Instruct", "--base-model",
     ),
@@ -245,8 +263,27 @@ def main(
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
     use_sae = sae_dir is not None
-    baseline_subdir = "full_sae" if use_sae else "full_probes"
-    baseline_label = "full_sae" if use_sae else "full_probes"
+    use_causal_filter = use_sae and causal_filter_path is not None
+    if use_causal_filter:
+        baseline_subdir = "full_sae_causal"
+        baseline_label = "full_sae_causal"
+    elif use_sae:
+        baseline_subdir = "full_sae"
+        baseline_label = "full_sae"
+    else:
+        baseline_subdir = "full_probes"
+        baseline_label = "full_probes"
+
+    causal_filter_set: set[int] | None = None
+    if use_causal_filter:
+        with causal_filter_path.open("r") as f:
+            cf = json.load(f)
+        causal_filter_set = {int(x) for x in cf.get("passing_feature_ids", [])}
+        if not causal_filter_set:
+            raise typer.BadParameter(
+                f"causal_filter_path={causal_filter_path} has zero "
+                f"passing_feature_ids; nothing to surface to the LLM."
+            )
 
     if specimen_ids_file is not None:
         with specimen_ids_file.open("r") as f:
@@ -311,6 +348,15 @@ def main(
     typer.echo(f"==> Output      : {out_dir}")
     typer.echo(f"==> Probe bank  : {probe_bank_dir}")
     typer.echo(f"==> SAE         : {sae_dir or '(none)'}")
+    typer.echo(
+        f"==> Causal flt  : "
+        f"{causal_filter_path if use_causal_filter else '(none)'}"
+        + (
+            f" ({len(causal_filter_set)} features)"
+            if use_causal_filter and causal_filter_set
+            else ""
+        )
+    )
     typer.echo(f"==> Adapter     : {adapter_path or '(none, base LLM only)'}")
     typer.echo(f"==> Specimens   : {len(specimen_ids)}")
 
@@ -440,6 +486,7 @@ def main(
                         activations=acts,
                         labels=sae_labels,
                         top_k_prompt=sae_top_k_prompt,
+                        causal_filter=causal_filter_set,
                     )
             query = _enriched_query(probes_json, sae_features_str)
 
@@ -473,6 +520,11 @@ def main(
             if use_sae:
                 traj.metadata["sae_dir"] = str(sae_dir)
                 traj.metadata["sae_features_in_prompt"] = sae_features_str
+                if use_causal_filter:
+                    traj.metadata["causal_filter_path"] = str(causal_filter_path)
+                    traj.metadata["causal_filter_n_passing"] = (
+                        len(causal_filter_set) if causal_filter_set else 0
+                    )
 
             out_f.write(traj.model_dump_json() + "\n")
             out_f.flush()
@@ -506,6 +558,9 @@ def main(
             "probe_bank_dir": str(probe_bank_dir),
             "sae_dir": str(sae_dir) if sae_dir is not None else None,
             "sae_labels_path": str(sae_labels_path) if sae_labels_path is not None else None,
+            "causal_filter_path": (
+                str(causal_filter_path) if causal_filter_path is not None else None
+            ),
             "base_model": base_model,
             "adapter_path": str(adapter_path) if adapter_path is not None else None,
             "n_specimens": len(specimen_ids),

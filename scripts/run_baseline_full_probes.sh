@@ -70,6 +70,9 @@ fi
 if [ -n "${SAE_TOP_K_PROMPT:-}" ]; then
     EXTRA+=(--sae-top-k-prompt "${SAE_TOP_K_PROMPT}")
 fi
+if [ -n "${CAUSAL_FILTER_PATH:-}" ]; then
+    EXTRA+=(--causal-filter-path "${CAUSAL_FILTER_PATH}")
+fi
 
 echo "==> Phase 12/13: probe-augmented Pipeline A"
 echo "    Start         : ${START}"
@@ -78,6 +81,7 @@ echo "    Output root   : ${OUT_ROOT}"
 echo "    Base model    : ${BASE_MODEL}"
 echo "    Adapter path  : ${ADAPTER_PATH:-(none)}"
 echo "    SAE dir       : ${SAE_DIR:-(none)}"
+echo "    Causal filter : ${CAUSAL_FILTER_PATH:-(none)}"
 echo "    Max steps     : ${MAX_STEPS}"
 echo "    Ablation      : ${ABLATION}"
 echo "    LLM temp      : ${LLM_TEMP}"
