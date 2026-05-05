@@ -163,14 +163,22 @@ def test_label_feature_falls_back_when_no_pattern():
     n = 200
     rng = np.random.default_rng(2)
     activations = rng.standard_normal(n).clip(min=0.0).astype(np.float32)
-    motifs = rng.choice(["triangular_disk", "ring", "linear"], size=n, p=[0.4, 0.3, 0.3])
+    # Vary motifs AND phases so neither categorical can lock at the
+    # high purity threshold below; that's the "no pattern" condition.
+    motifs = rng.choice(
+        ["triangular_disk", "ring", "linear"], size=n, p=[0.4, 0.3, 0.3],
+    )
+    phases = rng.choice(
+        ["solid-like", "liquid-like", "gas-like"],
+        size=n, p=[0.34, 0.33, 0.33],
+    )
     rec = label_feature(
         feature_idx=99,
         feature_activations=activations,
         motifs=motifs.astype(str),
         atom_counts=rng.integers(5, 30, size=n).astype(np.float32),
         temperatures=rng.uniform(0.1, 2.0, size=n).astype(np.float32),
-        phases=np.full(n, "liquid-like"),
+        phases=phases.astype(str),
         top_n=50,
         min_purity=0.95,
         min_corr=0.95,
