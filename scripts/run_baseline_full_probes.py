@@ -52,6 +52,7 @@ from fmllm.orchestrator import (  # noqa: E402
     TransformersLLM,
     build_runners_from_checkpoints,
 )
+from fmllm.representation.sae import TopKSAE  # noqa: E402
 from fmllm.training.probe_bank import ProbeBank  # noqa: E402
 from fmllm.utils.config import load_config  # noqa: E402
 from fmllm.utils.logging import configure_logging  # noqa: E402
@@ -103,12 +104,76 @@ def _format_probes_for_prompt(probe_outputs: dict[str, dict[str, Any]]) -> str:
     return json.dumps(summary, sort_keys=True)
 
 
-def _enriched_query(probes_json: str) -> str:
-    return (
-        f"{_BASE_QUERY}\n\n"
+def _enriched_query(probes_json: str, sae_features_str: str = "") -> str:
+    parts = [
+        _BASE_QUERY,
+        "",
         f"PROBES (derived from a frozen FM2 representation, treat as "
-        f"approximate hints, not ground truth): {probes_json}"
-    )
+        f"approximate hints, not ground truth): {probes_json}",
+    ]
+    if sae_features_str:
+        parts.append("")
+        parts.append(
+            f"SAE_FEATURES (top-k labelled directions in FM2's "
+            f"representation that activated for this specimen): "
+            f"{sae_features_str}"
+        )
+    return "\n".join(parts)
+
+
+def _load_sae_and_labels(
+    sae_dir: Path, labels_path: Path | None, device: str,
+) -> tuple[TopKSAE, "np.ndarray", "np.ndarray", dict[int, str]]:
+    """Load the trained SAE plus its feature label mapping."""
+    payload = torch.load(sae_dir / "sae.pt", map_location=device, weights_only=False)
+    sae = TopKSAE(
+        in_dim=int(payload["in_dim"]),
+        hidden_dim=int(payload["hidden_dim"]),
+        k=int(payload["k"]),
+    ).to(device)
+    sae.load_state_dict(payload["state_dict"], strict=True)
+    sae.eval()
+    cls_mean = np.asarray(payload["cls_mean"], dtype=np.float32)
+    cls_std = np.asarray(payload["cls_std"], dtype=np.float32)
+    if labels_path is None:
+        # Auto-discover the latest under runs/sae_labels/.
+        cands = sorted(
+            Path("runs/sae_labels").glob("*/labels.json"),
+            key=lambda p: p.stat().st_mtime, reverse=True,
+        )
+        labels_path = cands[0] if cands else None
+    if labels_path is None or not labels_path.exists():
+        raise typer.BadParameter(
+            "no SAE labels found. Run scripts/label_sae_features.sh first."
+        )
+    with labels_path.open("r") as f:
+        labels_raw = json.load(f)
+    labels = {int(k): str(v) for k, v in labels_raw.items()}
+    return sae, cls_mean, cls_std, labels
+
+
+def _format_sae_features(
+    *,
+    activations: "np.ndarray",       # (hidden_dim,)
+    labels: dict[int, str],
+    top_k_prompt: int,
+) -> str:
+    """Take the top-k active features for a specimen and render their
+    labels + activation values as a compact string."""
+    if activations.size == 0:
+        return ""
+    nonzero_idx = np.nonzero(activations)[0]
+    if nonzero_idx.size == 0:
+        return ""
+    nonzero_acts = activations[nonzero_idx]
+    order = np.argsort(nonzero_acts)[::-1][:top_k_prompt]
+    top_idx = nonzero_idx[order]
+    top_act = nonzero_acts[order]
+    items = []
+    for i, a in zip(top_idx, top_act, strict=True):
+        label = labels.get(int(i), f"f{int(i)}")
+        items.append(f'"{label}": {float(a):.2f}')
+    return "{" + ", ".join(items) + "}"
 
 
 @app.command()
@@ -130,6 +195,23 @@ def main(
     probe_bank_dir: Path | None = typer.Option(
         None, "--probe-bank-dir",
         help="Probe bank directory. Default: latest under checkpoints/probes/.",
+    ),
+    sae_dir: Path | None = typer.Option(
+        None, "--sae-dir",
+        help="Trained SAE directory. When set, the runner forwards "
+             "each specimen through FM2 + SAE and injects the top-k "
+             "labelled features into the user message alongside the "
+             "PROBES payload. Output then goes to runs/holdout/full_sae/ "
+             "instead of runs/holdout/full_probes/.",
+    ),
+    sae_labels_path: Path | None = typer.Option(
+        None, "--sae-labels-path",
+        help="labels.json for the SAE. Default: latest under "
+             "runs/sae_labels/.",
+    ),
+    sae_top_k_prompt: int = typer.Option(
+        8, "--sae-top-k-prompt",
+        help="How many top-active SAE features to surface per specimen.",
     ),
     base_model: str = typer.Option(
         "Qwen/Qwen2.5-7B-Instruct", "--base-model",
@@ -162,6 +244,10 @@ def main(
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    use_sae = sae_dir is not None
+    baseline_subdir = "full_sae" if use_sae else "full_probes"
+    baseline_label = "full_sae" if use_sae else "full_probes"
+
     if specimen_ids_file is not None:
         with specimen_ids_file.open("r") as f:
             specimen_ids = list(json.load(f))
@@ -169,10 +255,10 @@ def main(
             raise typer.BadParameter(
                 f"{specimen_ids_file} must be a JSON list of ints"
             )
-        run_slug = f"baseline-full-probes-{len(specimen_ids)}-holdout"
+        run_slug = f"baseline-{baseline_label}-{len(specimen_ids)}-holdout"
     else:
         specimen_ids = list(range(start, start + count))
-        run_slug = f"baseline-full-probes-{count}"
+        run_slug = f"baseline-{baseline_label}-{count}"
 
     if probe_bank_dir is None:
         probe_bank_dir = _latest_dir(Path("checkpoints/probes"))
@@ -182,14 +268,14 @@ def main(
                 "scripts/train_probe_bank.sh first."
             )
 
-    # Resume detection: if a previous run-id under runs/holdout/full_probes/
-    # has a non-empty trajectories.jsonl, append rather than overwrite
-    # and skip already-processed specimens.
-    full_probes_root = out / "full_probes"
+    # Resume detection: scan the matching subdir for a non-empty
+    # trajectories.jsonl. With SAE on, the subdir is full_sae;
+    # otherwise full_probes.
+    base_subdir_root = out / baseline_subdir
     resume_already_done: set[int] = set()
     resume_dir: Path | None = None
-    if full_probes_root.exists():
-        for d in sorted(full_probes_root.iterdir(), key=lambda p: p.name, reverse=True):
+    if base_subdir_root.exists():
+        for d in sorted(base_subdir_root.iterdir(), key=lambda p: p.name, reverse=True):
             jsonl = d / "trajectories.jsonl"
             if jsonl.exists() and jsonl.stat().st_size > 0:
                 resume_dir = d
@@ -216,7 +302,7 @@ def main(
         )
     else:
         run_id = generate_run_id(run_slug)
-        out_dir = out / "full_probes" / run_id
+        out_dir = out / baseline_subdir / run_id
         out_dir.mkdir(parents=True, exist_ok=True)
         run_mode = "fresh"
     configure_logging(out_dir)
@@ -224,6 +310,7 @@ def main(
     typer.echo(f"==> Run id      : {run_id}")
     typer.echo(f"==> Output      : {out_dir}")
     typer.echo(f"==> Probe bank  : {probe_bank_dir}")
+    typer.echo(f"==> SAE         : {sae_dir or '(none)'}")
     typer.echo(f"==> Adapter     : {adapter_path or '(none, base LLM only)'}")
     typer.echo(f"==> Specimens   : {len(specimen_ids)}")
 
@@ -247,6 +334,20 @@ def main(
 
     bank = ProbeBank.load(probe_bank_dir, device=device).eval()
     typer.echo(f"==> Probes      : {bank.names()}")
+
+    # SAE + labels (optional) ----------------------------------------------
+    sae: TopKSAE | None = None
+    sae_cls_mean = None
+    sae_cls_std = None
+    sae_labels: dict[int, str] = {}
+    if use_sae:
+        sae, sae_cls_mean, sae_cls_std, sae_labels = _load_sae_and_labels(
+            sae_dir=sae_dir, labels_path=sae_labels_path, device=device,
+        )
+        typer.echo(
+            f"==> SAE config  : in_dim={sae.in_dim} hidden_dim={sae.hidden_dim} "
+            f"k={sae.k} | {len(sae_labels)} labels loaded"
+        )
 
     # Verifier -------------------------------------------------------------
     verifier = build_default_verifier(
@@ -273,10 +374,19 @@ def main(
         sources_config=SourcesConfig.for_ablation(ablation),
     )
 
-    # Pre-compute probes for all specimens ---------------------------------
+    # Pre-compute probes (and SAE features) for all specimens -------------
     todo = [s for s in specimen_ids if int(s) not in resume_already_done]
-    typer.echo(f"==> Computing probes for {len(todo)} specimens")
+    typer.echo(f"==> Computing probes/SAE for {len(todo)} specimens")
     probes_by_sid: dict[int, dict[str, dict[str, Any]]] = {}
+    sae_features_by_sid: dict[int, np.ndarray] = {}
+
+    sae_cls_mean_t = (
+        torch.from_numpy(sae_cls_mean).to(device) if use_sae else None
+    )
+    sae_cls_std_t = (
+        torch.from_numpy(sae_cls_std).to(device) if use_sae else None
+    )
+
     with h5py.File(h5_path, "r") as h5:
         for start_i in range(0, len(todo), 64):
             batch_ids = todo[start_i : start_i + 64]
@@ -290,6 +400,13 @@ def main(
             outs = bank.evaluate(cls)
             for sid, out in zip(batch_ids, outs, strict=True):
                 probes_by_sid[int(sid)] = out
+            if use_sae and sae is not None:
+                with torch.no_grad():
+                    cls_norm = (cls - sae_cls_mean_t) / sae_cls_std_t
+                    z = sae.encode(cls_norm)
+                z_np = z.detach().cpu().numpy()
+                for sid, row in zip(batch_ids, z_np, strict=True):
+                    sae_features_by_sid[int(sid)] = row
 
     # Run OHVD loop with enriched per-specimen query -----------------------
     jsonl_path = out_dir / "trajectories.jsonl"
@@ -315,7 +432,16 @@ def main(
             if probes is None:
                 continue
             probes_json = _format_probes_for_prompt(probes)
-            query = _enriched_query(probes_json)
+            sae_features_str = ""
+            if use_sae:
+                acts = sae_features_by_sid.get(int(sid))
+                if acts is not None:
+                    sae_features_str = _format_sae_features(
+                        activations=acts,
+                        labels=sae_labels,
+                        top_k_prompt=sae_top_k_prompt,
+                    )
+            query = _enriched_query(probes_json, sae_features_str)
 
             traj = loop.run(query=query, specimen_id=int(sid))
             counters["total"] += 1
@@ -335,7 +461,7 @@ def main(
             # Inject probe metadata into the trajectory for traceability.
             if traj.metadata is None:
                 traj.metadata = {}
-            traj.metadata["baseline"] = "full_probes"
+            traj.metadata["baseline"] = baseline_label
             traj.metadata["probe_bank_dir"] = str(probe_bank_dir)
             traj.metadata["probes_summary"] = {
                 name: {
@@ -344,6 +470,9 @@ def main(
                 }
                 for name in bank.names()
             }
+            if use_sae:
+                traj.metadata["sae_dir"] = str(sae_dir)
+                traj.metadata["sae_features_in_prompt"] = sae_features_str
 
             out_f.write(traj.model_dump_json() + "\n")
             out_f.flush()
@@ -362,7 +491,7 @@ def main(
     with (out_dir / "summary.yaml").open("w") as f:
         yaml.safe_dump(
             {
-                "baseline": "full_probes",
+                "baseline": baseline_label,
                 "counters": counters,
                 "completed_utc": datetime.now(UTC).isoformat(),
             },
@@ -375,6 +504,8 @@ def main(
             "h5_path": str(h5_path),
             "fm2_checkpoint": str(fm2_ckpt),
             "probe_bank_dir": str(probe_bank_dir),
+            "sae_dir": str(sae_dir) if sae_dir is not None else None,
+            "sae_labels_path": str(sae_labels_path) if sae_labels_path is not None else None,
             "base_model": base_model,
             "adapter_path": str(adapter_path) if adapter_path is not None else None,
             "n_specimens": len(specimen_ids),

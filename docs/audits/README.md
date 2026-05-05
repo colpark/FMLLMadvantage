@@ -19,5 +19,6 @@ check pass / fail / fixed, and signs off only when every check passes.
 - `09-connector-audit.md` - Phase 9 scaffolding audit (probes + Stage 1 alignment).
 - `10-ssl-fm2-audit.md` - Phase 10 scaffolding audit (masked-RDF SSL backbone).
 - `11-cot-sft-audit.md` - Phase 11 Stage 2 scaffolding audit (probe bank + synthetic CoT + SFT).
+- `13-sae-audit.md` - Phase 13 scaffolding audit (Top-K SAE + correlation-based labelling + Pipeline A injection).
 
 Subsequent phases add one audit report each.

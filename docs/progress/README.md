@@ -22,3 +22,4 @@ One markdown document per pipeline phase. Each document records:
 - `09-connector.md` - Phase 9 scaffolding, FM2 representation connector (Layer C) plus the probing study. Closed with a documented negative result.
 - `10-ssl-fm2.md` - Phase 10 scaffolding, self-supervised FM2 backbone with masked-RDF reconstruction (Layer D). Closed with a documented negative result.
 - `11-cot-sft.md` - Phase 11 Stage 2 scaffolding: probe bank, synthetic CoT generator, LoRA SFT bootstrap.
+- `13-sae.md` - Phase 13 scaffolding: Top-K SAE on FM2 CLS + correlation-based feature labelling + injection into Pipeline A's prompt.

@@ -26,6 +26,12 @@
 #                       of the base LLM. The Phase 11 cot_sft adapter
 #                       is a candidate but format mismatch may apply.)
 #   PROBE_BANK_DIR     (default: latest under checkpoints/probes/)
+#   SAE_DIR            (default: unset; when set, SAE-derived feature
+#                       labels are injected into the user message and
+#                       output goes to runs/holdout/full_sae/ instead
+#                       of runs/holdout/full_probes/)
+#   SAE_LABELS_PATH    (default: latest under runs/sae_labels/)
+#   SAE_TOP_K_PROMPT   (default: 8)
 #   MAX_STEPS          (default: 16)
 #   ABLATION           (default: V4)
 #   LLM_TEMP           (default: 0.4)
@@ -55,13 +61,23 @@ fi
 if [ -n "${PROBE_BANK_DIR:-}" ]; then
     EXTRA+=(--probe-bank-dir "${PROBE_BANK_DIR}")
 fi
+if [ -n "${SAE_DIR:-}" ]; then
+    EXTRA+=(--sae-dir "${SAE_DIR}")
+fi
+if [ -n "${SAE_LABELS_PATH:-}" ]; then
+    EXTRA+=(--sae-labels-path "${SAE_LABELS_PATH}")
+fi
+if [ -n "${SAE_TOP_K_PROMPT:-}" ]; then
+    EXTRA+=(--sae-top-k-prompt "${SAE_TOP_K_PROMPT}")
+fi
 
-echo "==> Phase 12: probe-augmented Pipeline A"
+echo "==> Phase 12/13: probe-augmented Pipeline A"
 echo "    Start         : ${START}"
 echo "    Count         : ${COUNT}"
 echo "    Output root   : ${OUT_ROOT}"
 echo "    Base model    : ${BASE_MODEL}"
 echo "    Adapter path  : ${ADAPTER_PATH:-(none)}"
+echo "    SAE dir       : ${SAE_DIR:-(none)}"
 echo "    Max steps     : ${MAX_STEPS}"
 echo "    Ablation      : ${ABLATION}"
 echo "    LLM temp      : ${LLM_TEMP}"
