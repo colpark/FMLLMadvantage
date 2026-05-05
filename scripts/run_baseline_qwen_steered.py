@@ -234,6 +234,9 @@ def main(
         max_steps=max_steps,
         sources_config=SourcesConfig.for_ablation(ablation),
         filter_passing=False,
+        progress_every=10,            # log every 10 specimens so the
+                                       # steered run shows progress
+                                       # well before specimen 50.
     )
 
     write_manifest(
