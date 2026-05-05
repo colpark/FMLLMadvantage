@@ -110,7 +110,7 @@ hr { border: none; border-top: 1px solid var(--line); margin: 30px 0; }
 
 <h1>FMLLMadvantage</h1>
 <p class="subtitle">Compositional World Models on a Synthetic 2D Lennard-Jones Testbed</p>
-<p class="meta">Project summary as of 2026-05-04 &middot; phases 0 through 8a complete &middot; <a href="https://github.com/colpark/FMLLMadvantage">github.com/colpark/FMLLMadvantage</a></p>
+<p class="meta">Project summary as of 2026-05-04 &middot; phases 0 through 9 complete &middot; <a href="https://github.com/colpark/FMLLMadvantage">github.com/colpark/FMLLMadvantage</a></p>
 
 <div class="callout">
 <strong>One-paragraph thesis.</strong>
@@ -394,6 +394,28 @@ A small open-weights LLM (Qwen 2.5 7B Instruct) becomes a useful scientific reas
 <li><strong>The 26 FAILs softened to CAVEATs are still wrong commits 50% of the time.</strong> Softening preserves the architectural claim but does not fix FM1.</li>
 </ul>
 
+<h2>7.5 Phase 9 negative result: representation connectors do not add usable value (under this recipe)</h2>
+
+<p>Phase 9 tested whether direct access to FM2's hidden representation, projected into Qwen's input embedding space via a Q-Former plus a linear projection, gave the LLM useful information beyond what the typed energy-head output already provided. The answer is empirically <strong>no</strong> for the recipe tried (frozen FM2, frozen Qwen, Stage 1 LM-loss alignment against templated text annotations). Three diagnostics agree:</p>
+
+<table>
+<thead><tr><th>Diagnostic</th><th>Result</th><th>Read</th></tr></thead>
+<tbody>
+<tr><td>Frozen-backbone probes (n_atoms, diameter, coordination, phase)</td><td>r&sup2; 0.20 / 0.66 / 0.63, phase acc 0.88</td><td>Selective richness; n_atoms is essentially unrecoverable because FM2's per-atom-energy training intentionally abstracts it away.</td></tr>
+<tr><td>Feature-shuffle ablation (real vs random FM features paired with text)</td><td>Final loss 0.14 (real) vs 0.19 (shuffled), gap 0.05</td><td>About one categorical's worth of conditioning is transferred. Real but small.</td></tr>
+<tr><td>Generation inspector on 8 specimens</td><td>6 of 8 produced "13-atom triangular disk T = 0.24, solid-like" regardless of input; 0 of 8 matched true T; 1 of 8 matched true N</td><td>The connector learned the template structure but encodes the marginal-mode specimen, not the input.</td></tr>
+</tbody>
+</table>
+
+<p>Architectural reading: the typed head-output contract was already capturing essentially all the recoverable signal that the LLM needs. Layer C with Stage 1 alignment alone is not the path to richer LLM-FM coupling on this testbed. Two paths remain unexplored:</p>
+
+<ul>
+<li><strong>Stage 2 task tuning</strong> (LoRA on Qwen, end-to-end against the identification objective). Plausibly fixes both failure modes the diagnostics identified.</li>
+<li><strong>Layer D self-supervised pretraining of FM2</strong> (masked-RDF modeling or contrastive on cluster pairs) to raise the representation ceiling. Multi-week work.</li>
+</ul>
+
+<p>Neither was run; both are documented in <code>docs/progress/09-connector.md</code> as candidate next phases.</p>
+
 <h2 id="open">8. What is still open</h2>
 
 <table>
@@ -405,6 +427,8 @@ A small open-weights LLM (Qwen 2.5 7B Instruct) becomes a useful scientific reas
 <tr><td>FM1 retrain with in-box position prior</td><td>Whether positions_in_box can return to a hard constraint without rejecting correct claims.</td><td>~1 day training + recalibration.</td></tr>
 <tr><td>Literature DB with T-resolved energy axis</td><td>Whether the literature source can re-enable energy comparison without spurious finite-T CAVEATs.</td><td>~1 week of physics work.</td></tr>
 <tr><td>Larger test set</td><td>Tighter confidence bounds on calibrated_uncertainty (currently right at threshold).</td><td>Compute-bound: 1000+ specimens at ~30s each.</td></tr>
+<tr><td>Stage 2 task tuning of the FM2 connector</td><td>Whether end-to-end LoRA on Qwen against the identification objective changes the Phase 9 negative result.</td><td>~1 week.</td></tr>
+<tr><td>Layer D self-supervised FM2 pretraining</td><td>Whether masked-RDF modeling or contrastive training raises the representation ceiling above what Phase 9 probes recovered.</td><td>Multi-week. Out-of-scope for the current testbed.</td></tr>
 </tbody>
 </table>
 

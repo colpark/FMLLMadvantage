@@ -142,28 +142,151 @@ After Stage 1 lands, the next session wires the connector into the
 TransformersLLM inference path so we can re-run the held-out audit
 with the connector active. That lives in Phase 9.B.
 
-## What this phase will and will not prove
+## What this phase proved (negative result)
 
-It will prove:
+Three diagnostics converged on a clear conclusion: **Layer C with a
+Stage 1 alignment recipe (frozen FM2, frozen Qwen, LM loss against
+templated text) does not transfer FM2's representation into a form
+the LLM can use.** The architectural premise that representation
+access would let the LLM beat the head-output contract did not
+materialize on this testbed.
 
-- Whether FM2's energy-supervised representation holds task-extra
-  signal recoverable by linear / 2-layer probes.
-- Whether a small Q-Former + projection can align that representation
-  with Qwen's input embedding space, measured by templated-text
-  reconstruction loss.
+### Diagnostic 1: probing study
 
-It will not yet prove:
+Headline numbers from `scripts/run_fm2_probes.sh` on 2000 frozen-
+backbone CLS embeddings:
 
-- Whether the aligned tokens improve goal accuracy or reduce
-  hallucination on the held-out audit. That is Phase 9.B (integration
-  into the orchestrator) and Phase 9.C (re-running
-  `scripts/run_holdout.sh` with the connector active).
+| Probe | Score | Read |
+|---|---|---|
+| `n_atoms` | r² = 0.20 | Atom count discarded by FM2's per-atom training objective |
+| `diameter_lj` | r² = 0.66 | Geometric scale partially recoverable |
+| `mean_coordination` | r² = 0.63 | Local density partially recoverable |
+| `phase` | acc = 0.88 | Thermal regime strongly encoded |
+
+Interpretation: selective richness, with `n_atoms` essentially
+absent. This bounded the architectural ceiling for any connector
+trained on the same backbone.
+
+### Diagnostic 2: feature-shuffle ablation
+
+`scripts/train_fm2_connector.sh` rerun with FM features permuted
+within each batch:
+
+| Step | Real features | Shuffled features | Gap |
+|---|---|---|---|
+| 1 | 5.03 | 5.03 | 0.00 |
+| 250 | 0.25 | 0.33 | 0.08 |
+| 500 | 0.19 | 0.26 | 0.07 |
+| **740** | **0.14** | **0.19** | **0.05** |
+
+The 0.05-nat gap corresponds to roughly 1.5 nats of total information
+transferred via the connector across a 30-token answer span. That is
+about one categorical's worth of signal (e.g., phase). It is real
+but small.
+
+### Diagnostic 3: generation inspection
+
+`scripts/inspect_connector.sh` on 8 specimens. The real-FM
+generations collapse to a small set of stereotyped templated
+descriptions:
+
+- 6 of 8 specimens produced "13-atom triangular disk" regardless
+  of true N (range 9-19).
+- All 8 produced "T = 0.24 LJ, solid-like regime" regardless of true
+  T (range 0.17-1.86).
+- All 8 produced "triangular disk" including specimen 4 whose
+  ground-truth motif was "ring".
+
+The zero-FM generations differ qualitatively (no template structure;
+hallucinated "hexagonal dimer", units not in the testbed), so the
+connector did learn template structure. But it did not learn
+specimen identity. The LLM sees the marginal-mode specimen, not the
+input.
+
+### Combined verdict
+
+Stage 1 with templated text + frozen LLM is *not* the right
+configuration for transferring FM representation to the LLM on this
+testbed. The connector ends up encoding a fixed prior over the
+dataset's marginal distribution, with very weak per-specimen
+conditioning.
+
+## Why this happened
+
+Two compounding reasons:
+
+1. **The text supervision did not require specimen-specific
+   conditioning to minimize loss.** Templated descriptions have ~5-6
+   varying parts (N, motif, T, phase, diameter, coordination), but
+   most of the LM-loss reduction comes from learning the template
+   structure itself. Once the connector + frozen Qwen reproduce the
+   format, the marginal-mode prediction wins on average.
+
+2. **The frozen Qwen cannot route the connector tokens against an
+   end-task signal.** The LM-loss objective rewards reconstructing
+   text, not making correct decisions. Without the LLM updating its
+   attention patterns to actually use the connector tokens, the
+   tokens drift toward whatever pattern minimizes text loss rather
+   than what carries useful information.
+
+## What we did *not* try (and where the architectural ceiling
+might still be)
+
+- **Stage 2 task tuning.** Add a LoRA adapter on Qwen and train
+  end-to-end on the actual identification objective with the
+  connector + LoRA optimized jointly. The reward becomes goal
+  accuracy, not text reconstruction. Plausibly fixes both failure
+  modes above. Not run in this phase.
+- **Layer D self-supervised pretraining of FM2.** Replace the
+  energy-only supervised objective with masked-RDF modeling or
+  contrastive on cluster pairs. The probing study told us the
+  ceiling for a frozen energy-supervised backbone is selective
+  richness; Layer D raises that ceiling. Out of scope for Phase 9.
+- **Larger Stage 1 training.** 2000 specimens × 3 epochs is small,
+  but the loss curve flattened by step 500, so more steps probably
+  do not change the qualitative picture. Untested.
+
+## Phase 9 outcome and recommendation
+
+The phase shipped scaffolding (probes, connector module, training,
+inspection) plus three diagnostics that jointly establish a
+publishable negative result. Phase 9.B (OHVD integration) and Phase
+9.C (held-out re-evaluation) are *not run*: integrating a connector
+that produces marginal-mode generations would not move metrics, and
+the inspector confirms this without needing the held-out audit.
+
+Recommended next moves, in priority order:
+
+1. **Close Phase 9 with the negative finding.** The architectural
+   conclusion stands: on this testbed, the typed head-output
+   contract captures essentially all the recoverable signal. Layer C
+   with frozen-frozen LM-aligned connectors does not add value.
+2. **Stage 2 task tuning as Phase 9b.** ~1 week of work. Worth doing
+   if the architectural question is "does end-to-end task tuning
+   change the picture?". Higher-effort, more-informative.
+3. **Layer D self-supervised pretraining as Phase 10.** Multi-week
+   work, would require regenerating FM2 with a new objective. The
+   only path to a higher representation ceiling on this testbed.
+
+## Reproduction
+
+```bash
+bash scripts/run_fm2_probes.sh                                  # probes
+bash scripts/train_fm2_connector.sh                             # real run
+SHUFFLE_FEATURES=1 bash scripts/train_fm2_connector.sh          # shuffle ablation
+bash scripts/inspect_connector.sh -n 8                          # inspector
+```
 
 ## Where Phase 9 fits
 
 Phase 9 is the architectural-depth follow-up to the Phase 8a audit.
 The audit established that the verified composite outperforms its
-strawmen on a held-out set. Phase 9 asks the deeper question raised
-by that audit: are we using the foundation models or just their
-heads, and does it matter? The probing study answers the first half;
-the connector evaluation answers the second.
+strawmen on a held-out set. Phase 9 asked the deeper question: are
+we using the foundation models or just their heads, and does it
+matter? The probing study answered the first half (the
+representation has selective signal). The connector experiment
+answered the second (a frozen-frozen LM-aligned connector does not
+make that signal usable to the LLM). The architectural conclusion is
+therefore that Phase 8a's typed-claim contract is not artificially
+weak, and the next leverage point is upstream of the connector
+architecture.

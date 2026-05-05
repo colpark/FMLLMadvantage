@@ -1,10 +1,13 @@
-# Audit Report, Phase 9 (scaffolding)
+# Audit Report, Phase 9
 
-**Audited at:** 2026-05-04T17:00:00Z
+**Audited at:** 2026-05-04T22:00:00Z
 **Auditor:** Claude Code (self-audit)
-**Result:** PASS for the scaffolding scope (probes + Stage 1 alignment).
-Subsequent integration phases (9.B, 9.C) are out of scope for this
-audit and remain explicitly deferred.
+**Result:** PASS for scaffolding (modules + CLIs + tests). Phase 9
+also produced an empirical *negative result* for the architectural
+question, documented in `docs/progress/09-connector.md`. Phase 9.B
+(OHVD integration) and Phase 9.C (held-out re-evaluation) are not
+run because the diagnostics established that running them would not
+move metrics.
 
 ## Summary
 
@@ -127,23 +130,23 @@ modified; eleven new CPU tests cover the new modules.
 - **Evidence:** `python -c "import ast; ast.parse(open(...).read())"`
   on all seven new or modified Python files returns OK.
 
-## Scope boundary (deferred to Phase 9.B and beyond)
+## Scope boundary
 
-Three things remain explicitly out of scope for this audit:
+Phase 9 shipped scaffolding plus three diagnostics. The diagnostics
+established a negative result strong enough that the originally
+planned 9.B and 9.C were demoted from "next steps" to "do not run":
 
-1. **OHVD inference-time integration.** The connector is a saved
-   checkpoint. The orchestrator's `TransformersLLM` does not yet
-   thread its tokens into the LLM's input embedding stream. Phase
-   9.B owns this; it depends on the Phase 9.0 probes coming back
-   with at least selective richness.
+1. **OHVD inference-time integration (was Phase 9.B).** Conditional
+   on the diagnostics showing real specimen-level conditioning. They
+   did not. Not run.
 
-2. **Stage 2 task tuning.** Stage 1 (alignment) trains against
-   templated text. Stage 2 will optionally LoRA-fine-tune the LLM
-   end-to-end against the N/motif/T identification objective.
+2. **Stage 2 task tuning.** Available as an opt-in next phase if the
+   architectural question "does end-to-end task tuning change Layer
+   C's value?" is worth ~1 week to answer. Not run as part of Phase
+   9.
 
-3. **Held-out re-evaluation with the connector active.** Phase 9.C
-   reruns `scripts/run_holdout.sh` once the connector is wired into
-   inference. Without 9.B that comparison cannot be measured.
+3. **Held-out re-evaluation with the connector active (was Phase
+   9.C).** Predicated on 9.B. Not run.
 
 ## What I deliberately did not do
 
@@ -159,13 +162,49 @@ Three things remain explicitly out of scope for this audit:
   explicitly admits that "all probes near chance" means the
   connector should not be built.
 
+## Empirical findings (added post-run)
+
+The phase ran three diagnostics and produced a converging negative
+result. Reproduced in detail in `docs/progress/09-connector.md`;
+summarized here for the audit trail.
+
+| Diagnostic | Output | Read |
+|---|---|---|
+| Probes | r²: n_atoms 0.20, diameter 0.66, coord 0.63, phase 0.88 acc | Selective richness; n_atoms unrecoverable |
+| Shuffle ablation | real loss 0.14, shuffled 0.19, gap 0.05 | ~1.5 nats total transferred |
+| Inspector | 6 of 8 outputs collapsed to "13-atom triangular disk T = 0.24" | Connector encoded marginal-mode prior, not specimen identity |
+
+The inspector is the most diagnostic: real-FM generations are
+qualitatively different from zero-FM generations (template structure
+is learned), but they are essentially specimen-invariant
+(marginal-mode N, T, motif, regardless of input). The shuffle
+ablation's small loss gap is consistent with this — the connector
+contributes about one categorical's worth of conditioning, which is
+not enough to flip the LLM's predictions to specimen-faithful text.
+
+## Why integration into the OHVD loop is not run
+
+Phase 9.B was conditional on the diagnostics showing real
+specimen-level conditioning. The diagnostics show the opposite:
+generations collapse to a marginal-mode prior. Wiring the connector
+into the OHVD loop's `TransformersLLM` would inject 32 mostly-fixed
+tokens per FM call, which the LLM would either ignore (best case)
+or drift toward (worst case, hallucinating "13-atom triangular disk"
+on a 5-atom ring specimen). Neither outcome is worth the engineering
+or compute cost. Phase 9.B is therefore deliberately not run, and
+the recommendation is to evaluate alternative paths (Stage 2 task
+tuning, or Layer D self-supervised pretraining) before any further
+Layer C investment on this testbed.
+
 ## Reproduction
 
 ```bash
 # Local
-uv run pytest tests/test_connectors.py -v   # 11 tests, no GPU
+uv run pytest tests/test_connectors.py -v   # 12 tests, no GPU
 
 # Remote
-bash scripts/run_fm2_probes.sh              # ~10 min, Phase 9.0
-bash scripts/train_fm2_connector.sh         # ~1 hr, Phase 9.A Stage 1
+bash scripts/run_fm2_probes.sh                              # ~10 min, Phase 9.0
+bash scripts/train_fm2_connector.sh                         # ~1 hr, Phase 9.A Stage 1
+SHUFFLE_FEATURES=1 bash scripts/train_fm2_connector.sh      # ~1 hr, ablation
+bash scripts/inspect_connector.sh -n 8                      # ~1 min, generation diag
 ```
