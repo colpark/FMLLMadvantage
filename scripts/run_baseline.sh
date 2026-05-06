@@ -41,9 +41,12 @@ fi
 START="${START:-0}"
 COUNT="${COUNT:-200}"
 H5_PATH="${H5_PATH:-data/synthetic_lj_v1/specimens.h5}"
-OUT_ROOT="${OUT_ROOT:-runs/baselines}"
+# Accept OUT (preferred, short) or OUT_ROOT (legacy) for the output
+# root. OUT takes precedence if both are set.
+OUT_ROOT="${OUT:-${OUT_ROOT:-runs/baselines}}"
 LLM_MODEL="${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
 LLM_TEMP="${LLM_TEMP:-0.4}"
+PROGRESS_EVERY="${PROGRESS_EVERY:-5}"
 GPU="${GPU:-0}"
 
 EXTRA=()
@@ -61,21 +64,14 @@ if [ "${LITERATURE_COMPARE_ENERGY:-0}" -eq 1 ]; then
 fi
 
 echo "==> Baseline runner"
-echo "    Baseline   : ${BASELINE}"
-echo "    Specimens  : [${START}, $((START + COUNT)))"
-echo "    H5 path    : ${H5_PATH}"
-echo "    Output root: ${OUT_ROOT}"
-echo "    LLM        : ${LLM_MODEL} (T=${LLM_TEMP})"
-echo "    GPU        : ${GPU}"
+echo "    Baseline    : ${BASELINE}"
+echo "    Specimens   : [${START}, $((START + COUNT)))"
+echo "    H5 path     : ${H5_PATH}"
+echo "    Output root : ${OUT_ROOT}"
+echo "    LLM         : ${LLM_MODEL} (T=${LLM_TEMP})"
+echo "    Progress    : every ${PROGRESS_EVERY} specimens"
+echo "    Adapter     : ${ADAPTER_PATH:-(none)}"
+echo "    GPU         : ${GPU}"
 echo
 
-CUDA_VISIBLE_DEVICES="${GPU}" uv run python scripts/run_baseline.py \
-    --baseline "${BASELINE}" \
-    --start "${START}" \
-    --count "${COUNT}" \
-    --h5-path "${H5_PATH}" \
-    --out "${OUT_ROOT}" \
-    --llm-model "${LLM_MODEL}" \
-    --llm-temperature "${LLM_TEMP}" \
-    "${EXTRA[@]}" \
-    "$@"
+CUDA_VISIBLE_DEVICES="${GPU}" uv run python scripts/run_baseline.py --baseline "${BASELINE}" --start "${START}" --count "${COUNT}" --h5-path "${H5_PATH}" --out "${OUT_ROOT}" --llm-model "${LLM_MODEL}" --llm-temperature "${LLM_TEMP}" --progress-every "${PROGRESS_EVERY}" "${EXTRA[@]}" "$@"

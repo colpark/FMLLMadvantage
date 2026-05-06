@@ -137,6 +137,13 @@ def main(
              "DB references are ground-state and the data is finite-T. "
              "Only meaningful for --baseline full.",
     ),
+    progress_every: int = typer.Option(
+        5, "--progress-every",
+        help="Log a progress line every N completed specimens. Default "
+             "5 (was effectively 50 via collect_trajectories' own "
+             "default; that meant ~50-150 minutes of silence on "
+             "Pipeline A before the first log).",
+    ),
 ) -> None:
     """Run one Phase 8a baseline."""
     if baseline not in {"naked", "no_verifier", "full"}:
@@ -266,6 +273,7 @@ def main(
         max_steps=max_steps,
         sources_config=SourcesConfig.for_ablation(ablation),
         filter_passing=False,
+        progress_every=progress_every,
     )
 
     write_manifest(
