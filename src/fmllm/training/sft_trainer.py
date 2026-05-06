@@ -176,8 +176,33 @@ def train_sft(
     )
     trainer.train()
 
-    save_lora(model, output_dir / "adapter")
-    tokenizer.save_pretrained(str(output_dir / "adapter"))
+    # In DDP, every rank arrives here; only rank 0 should write the
+    # adapter and tokenizer to disk. Otherwise multiple ranks race on
+    # the same path, or (worse) write to slightly different paths if
+    # the directory was generated per-rank upstream.
+    if is_distributed:
+        try:
+            import torch.distributed as dist  # noqa: PLC0415
+
+            should_save = dist.get_rank() == 0
+        except Exception:
+            should_save = True
+    else:
+        should_save = True
+
+    if should_save:
+        save_lora(model, output_dir / "adapter")
+        tokenizer.save_pretrained(str(output_dir / "adapter"))
+
+    if is_distributed:
+        try:
+            import torch.distributed as dist  # noqa: PLC0415
+
+            if dist.is_initialized():
+                dist.barrier()
+        except Exception:
+            pass
+
     return output_dir
 
 

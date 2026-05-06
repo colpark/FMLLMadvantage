@@ -86,14 +86,50 @@ def main(
     if not dataset.exists():
         raise typer.BadParameter(f"dataset not found: {dataset}")
 
-    run_id = generate_run_id("cot-sft-stage2")
+    # DDP-safe run_id: under torchrun, every rank executes this script
+    # independently, and each call to generate_run_id (which embeds a
+    # timestamp) would produce a slightly different id, ending up with
+    # one output directory per rank. We need a single shared run_id.
+    # Strategy: rank 0 generates, broadcasts via torch.distributed; other
+    # ranks receive. Falls back to local generation when not distributed.
+    import os as _os                     # noqa: PLC0415
+    _local_rank_env = _os.environ.get("LOCAL_RANK")
+    _world_size_env = int(_os.environ.get("WORLD_SIZE", "1"))
+    _is_distributed = (
+        _local_rank_env is not None
+        and int(_local_rank_env) >= 0
+        and _world_size_env > 1
+    )
+    if _is_distributed:
+        import torch.distributed as dist  # noqa: PLC0415
+
+        if not dist.is_initialized():
+            dist.init_process_group(backend="nccl")
+        if dist.get_rank() == 0:
+            run_id = generate_run_id("cot-sft-stage2")
+        else:
+            run_id = ""
+        obj = [run_id]
+        dist.broadcast_object_list(obj, src=0)
+        run_id = str(obj[0])
+        is_main = dist.get_rank() == 0
+    else:
+        run_id = generate_run_id("cot-sft-stage2")
+        is_main = True
+
     out_dir = out / run_id
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if is_main:
+        out_dir.mkdir(parents=True, exist_ok=True)
+    if _is_distributed:
+        import torch.distributed as dist  # noqa: PLC0415
+
+        dist.barrier()
 
     typer.echo(f"==> Run id      : {run_id}")
     typer.echo(f"==> Output      : {out_dir}")
     typer.echo(f"==> Dataset     : {dataset}")
     typer.echo(f"==> Base model  : {base_model}")
+    typer.echo(f"==> Distributed : {_is_distributed} (is_main={is_main})")
 
     records = _load_records(dataset)
     typer.echo(f"==> Records     : {len(records)}")
@@ -120,33 +156,34 @@ def main(
         gradient_checkpointing=True,
     )
 
-    write_manifest(
-        out_dir / "manifest.yaml",
-        script="scripts.train_cot_sft",
-        inputs={
-            "dataset": str(dataset),
-            "base_model": base_model,
-            "n_records": len(records),
-        },
-        config={
-            "run_id": run_id,
-            "epochs": epochs,
-            "learning_rate": learning_rate,
-            "lora_r": lora_r,
-            "lora_alpha": lora_alpha,
-            "per_device_batch_size": per_device_batch_size,
-            "grad_accum": grad_accum,
-            "max_seq_length": max_seq_length,
-            "seed": seed,
-        },
-        extra={
-            "stage": 2,
-            "objective": "synthetic-cot-sft",
-            "completed_utc": datetime.now(UTC).isoformat(),
-        },
-    )
-
-    typer.echo(f"==> Adapter saved at: {out_dir / 'adapter'}")
+    if is_main:
+        write_manifest(
+            out_dir / "manifest.yaml",
+            script="scripts.train_cot_sft",
+            inputs={
+                "dataset": str(dataset),
+                "base_model": base_model,
+                "n_records": len(records),
+            },
+            config={
+                "run_id": run_id,
+                "epochs": epochs,
+                "learning_rate": learning_rate,
+                "lora_r": lora_r,
+                "lora_alpha": lora_alpha,
+                "per_device_batch_size": per_device_batch_size,
+                "grad_accum": grad_accum,
+                "max_seq_length": max_seq_length,
+                "seed": seed,
+                "world_size": _world_size_env,
+            },
+            extra={
+                "stage": 2,
+                "objective": "synthetic-cot-sft",
+                "completed_utc": datetime.now(UTC).isoformat(),
+            },
+        )
+        typer.echo(f"==> Adapter saved at: {out_dir / 'adapter'}")
 
 
 if __name__ == "__main__":
