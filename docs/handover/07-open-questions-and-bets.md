@@ -4,6 +4,37 @@ This document is the strategic synthesis: given everything we've
 learned, what's the highest-payoff direction for someone picking
 this work up?
 
+## Highest-ROI follow-up (read first)
+
+**Combine the Phase 16 `cot_sft_sae` adapter with the Phase 4-8a
+verifier.** This is the single most likely path to push the
+project's ceiling above `full = 0.695`. The argument:
+
+- `full = 0.695` (Phase 8a, with verifier) is wrong on rings 100%
+  of the time and on tri-disk-liquid 69% of the time.
+- `cot_sft_sae = 0.650` (Phase 16, no verifier) partially repairs
+  the ring failure (33-43% accuracy) at modest cost on tri-disk-
+  solid (88% → 76%).
+- The two pipelines have qualitatively *different* wrong-claim
+  sets. Wrapping the trained adapter inside the OHVD loop and
+  giving it the verifier should catch each pipeline's wrongs.
+
+**Cost:** ~30-50 min on remote (one Pipeline A run with the
+adapter loaded).
+
+**Predicted ceiling:** plausible to reach 0.72-0.76 if the
+failure-set-disjointness argument holds.
+
+The single command (single line, no backslash):
+
+`ADAPTER_PATH=$(ls -td checkpoints/cot-sft-sae/*/adapter | head -1) SPECIMEN_IDS_FILE=runs/holdout_lock/ids.json OUT=runs/holdout_combined nohup bash scripts/run_baseline.sh full > /tmp/full_with_sft_sae.log 2>&1 &`
+
+(Output to a separate `runs/holdout_combined/` so the existing
+`full` column is preserved. Then re-evaluate after both finish.)
+
+This is the experiment to run before any of the open questions
+below.
+
 ## What's open (within the existing testbed)
 
 These are scoped to ~weeks of work on the existing infrastructure.
@@ -12,15 +43,18 @@ These are scoped to ~weeks of work on the existing infrastructure.
 
 Phase 11 stopped at Stage 2 (synthetic CoT bootstrap). Stages 3-4
 (STaR rejection sampling on verifier-PASS trajectories + GRPO with
-verifier-shaped reward) are unbuilt. They could close some of the
+verifier-shaped reward) are unbuilt. With Phase 16 having shown
+that training-time rich evidence carries the LLM to 0.650 single-
+shot, it is plausible that Stages 3-4 on the SAE-augmented dataset
+would push past `full = 0.695`. They could also close some of the
 23-point gap between `cot_sft = 0.467` and `full = 0.695`.
 
 **Cost:** ~1-2 weeks. Phase 6's GRPO trainer exists; the new
 piece is the prompt format.
 
-**Predicted ceiling:** plausible to reach 0.6, very unlikely to
-exceed `full = 0.695`. The lossy-summary problem of probes vs
-bridged tool messages is structural.
+**Predicted ceiling:** plausible to reach 0.7+ when applied on
+top of `cot_sft_sae`'s 0.650 base; harder to predict for the
+probes-only Phase 11 trajectory.
 
 ### Open question B: SAE at scale on Qwen activations
 

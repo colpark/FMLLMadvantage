@@ -265,19 +265,61 @@ et al. used ~1B activations. Our negative is "this specific
 small-data SAE doesn't help via this specific feature" — not
 "SAE steering doesn't work on LLM-orchestrated tool use."
 
+## Phase 16 — SAE-augmented CoT-SFT, no verifier (the positive)
+
+**Hypothesis:** an LLM trained via SFT on synthetic CoT records
+that include both probe outputs *and* SAE-derived feature labels
+can outperform the FM's own downstream head and the probes-only
+CoT-SFT baseline on a single-shot, no-verifier classification task.
+
+**Method:** extended `synthetic_cot.py` to render Step 1
+(probes) and Step 1b (top-K labelled SAE features) in the chain.
+Built a 10K-record dataset, trained a fresh LoRA adapter via SFT
+(4-GPU DDP, 3 epochs, effective batch 32, MAX_SEQ=1536), then
+evaluated single-shot with bf16 inference and MAX_NEW_TOKENS=768.
+Also added a reference baseline `probe_head` that maps probe
+outputs directly to a `PhysicalStateClaim` with no LLM.
+
+**Result (positive):**
+
+| | goal_accuracy | Δ vs cot_sft_sae |
+|---|---|---|
+| `probe_head` | 0.110 | +54.0 (LLM beats FM head by huge margin) |
+| `cot_sft` | 0.467 | +18.3 (SAE features add real training signal beyond probes) |
+| **`cot_sft_sae`** | **0.650** | reference |
+| `full` | 0.695 | -4.5 (single-shot LLM with no verifier nearly matches full Pipeline A) |
+
+**Sanity:** 200/200 committed, 198/200 unique final_claims (no
+template memorization). Per-(motif, phase) decomposition shows
+the failure pattern *shifted*: ring buckets that were 0% under
+`full` are now 33-43%; tri-disk-solid (the easy group) drops
+from 88% → 76%. The wrong-claim sets of `full` and
+`cot_sft_sae` are qualitatively different.
+
+**Mechanism:** training-time SAE label injection via supervised
+CoT works where inference-time injection (Phase 13/14) failed.
+The LLM, when *taught* to read SAE labels in the synthetic CoT
+chain, extracts useful information they encode about ring
+discrimination. When asked to read them in-context (Phase 13),
+it anchored on them and reasoned worse.
+
+**Reference doc:** `docs/progress/16-cot-sft-with-sae.md`.
+
 ## Side-by-side comparison (current state)
 
 ```
 HEADLINE:
-  cot_sft         = 0.467
-  full            = 0.695  ← reference
-  full_probes     = 0.562  (n=400, duplicates)
-  full_sae        = 0.585
-  full_sae_causal = 0.570
-  full_steered_6844_n200 = 0.660
-  naked           = 0.000
-  naked_vision    = 0.000
-  no_verifier     = 0.540
+  naked              = 0.000
+  naked_vision       = 0.000
+  probe_head         = 0.110  (FM head, no LLM)
+  cot_sft            = 0.467
+  no_verifier        = 0.540
+  full_probes        = 0.562  (n=400, duplicates)
+  full_sae_causal    = 0.570
+  full_sae           = 0.585
+  cot_sft_sae        = 0.650  *** Phase 16 positive
+  full_steered_6844  = 0.660
+  full               = 0.695  ← architectural ceiling (with verifier)
 ```
 
 Verdict-stratified breakdown for the verifier-using rows:
@@ -288,6 +330,12 @@ Verdict-stratified breakdown for the verifier-using rows:
 | hallucination_rate | 0.255 | 0.310 | 0.286 | 0.286 | 0.316 |
 | calibrated_abstention | 0.590 | 0.669 | 0.663 | 0.674 | 0.544 |
 | verdict P/C/N | 98/102/0 | 187/213/0 (×2 dup) | 98/102/0 | 98/102/0 | 98/102/0 |
+
+For the no-verifier rows (`cot_sft`, `cot_sft_sae`,
+`probe_head`, `naked`, `naked_vision`), `verdict P/C/N = 0/0/N`
+because no verifier was run; `commit_rate` indicates parse
+success and `goal_accuracy` is computed against ground truth
+directly.
 
 ## Eight world-model tests (auxiliary)
 
@@ -336,6 +384,7 @@ checkpoints/
   fm3_*/                     # FM3 trained checkpoint
   probes/                    # Phase 11 probe bank
   cot-sft/                   # Phase 11 LoRA adapter
+  cot-sft-sae/               # Phase 16 LoRA adapter (SAE-augmented)
   sae/                       # Phase 13 FM2 SAEs (multiple runs)
   qwen_sae/                  # Phase 15 Qwen SAE
 
@@ -351,7 +400,10 @@ runs/
     full_sae/
     full_sae_causal/
     full_steered_6844_n200/
+    cot_sft_sae/             # Phase 16 cot_sft_sae trajectories
+    probe_head/              # Phase 16 FM-head reference
   cot_datasets/              # Phase 11 synthetic CoT records
+  cot_datasets_sae/          # Phase 16 SAE-augmented CoT records
   sae_labels/                # Phase 13 feature labels
   sae_causal/                # Phase 14 causal effects + filter
   qwen_activations/          # Phase 15 Stage A

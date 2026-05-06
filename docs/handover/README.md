@@ -12,23 +12,37 @@ specialist FMs, a Qwen-class LLM as orchestrator) and ran a
 systematic series of architectural variants to find out which
 **information pathway** between FM and LLM works best.
 
-## The headline finding
+## The headline findings
 
-A typed-output contract plus multi-source verifier (`full = 0.695`
-goal accuracy on held-out specimens) is the architectural ceiling
-on this testbed. Five separate attempts to enrich the
-representation pathway between FM and LLM — connector tokens,
-self-supervised pretraining of the FM, CoT supervised fine-tuning,
-SAE feature injection into the prompt, and SAE activation steering
-of the LLM — all landed below `full`. The convergence is the
-result.
+**Two architectural pathways achieve near-ceiling goal accuracy
+on the held-out range:**
 
-The negatives are bounded by our setup (frozen 7B-class LLM,
-narrow categorical task, small SAE training data, closed-world
-synthetic data). They do not refute the methods themselves; they
-say *under these conditions on this task, none of these
-representation-level pathways improved on a typed-output +
-verification baseline*.
+1. **Typed-output contract + multi-source verifier**
+   (`full = 0.695`, Phase 8a) — the standard recipe. LLM
+   orchestrates FM tools as bridged-JSON evidence, multi-source
+   verifier gates with PASS/CAVEAT/FAIL, OHVD loop iterates.
+
+2. **Supervised CoT-SFT over rich representation evidence,
+   no verifier** (`cot_sft_sae = 0.650`, Phase 16) — single
+   forward, no orchestration loop. LoRA-tuned LLM trained on
+   synthetic CoTs that include both probe outputs and SAE-
+   derived feature labels, with the final commit anchored to
+   ground truth. Within 4.5 points of the verifier ceiling
+   without any inference-time orchestration.
+
+**The unifying architectural principle:** representation
+features are useful as *training-time supervision* for the LLM
+(Phase 16 positive: +18.3 over probes-only CoT-SFT, +54 over
+the FM head alone) but harmful as *inference-time prompt
+injection* (Phases 13-15 negatives: -11 to -3 vs `full`). The
+distinction between training and inference is the load-bearer.
+
+The findings are bounded by our setup (frozen 7B-class LLM,
+narrow categorical task, closed-world synthetic data). They
+say: *under these conditions on this task, the verifier and
+the SAE-augmented CoT-SFT recipe each achieve near-ceiling
+performance via different mechanisms; combining them is a
+natural follow-up.*
 
 ## How to read this folder
 
