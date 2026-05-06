@@ -215,7 +215,15 @@ def main(
         None, "--specimen-ids-file",
     ),
     out: Path = typer.Option(Path("runs/holdout"), "--out", "-o"),
-    max_new_tokens: int = typer.Option(256, "--max-new-tokens"),
+    max_new_tokens: int = typer.Option(
+        768, "--max-new-tokens",
+        help="Generation budget per specimen. Phase 16 CoTs include "
+             "Step 1 (5 probes) + Step 1b (top-K SAE features, "
+             "~80-120 chars each) + Step 2 + Step 3 + Final commit. "
+             "Top-K=8 records run ~600-800 tokens. Default 768 covers "
+             "the long tail; raise to 1024 if Step 1b uses verbose "
+             "SAE labels.",
+    ),
     batch_size: int = typer.Option(16, "--batch-size"),
     quantize: str = typer.Option(
         "4bit", "--quantize",

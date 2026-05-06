@@ -34,6 +34,7 @@ QUANTIZE="${QUANTIZE:-4bit}"
 START="${START:-0}"
 COUNT="${COUNT:-200}"
 TOP_K_FEATURES="${TOP_K_FEATURES:-8}"
+MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-768}"
 GPU="${GPU:-0}"
 
 EXTRA=()
@@ -42,6 +43,7 @@ EXTRA+=(--quantize "${QUANTIZE}")
 EXTRA+=(--start "${START}")
 EXTRA+=(--count "${COUNT}")
 EXTRA+=(--top-k-features "${TOP_K_FEATURES}")
+EXTRA+=(--max-new-tokens "${MAX_NEW_TOKENS}")
 if [ -n "${SPECIMEN_IDS_FILE:-}" ]; then
     EXTRA+=(--specimen-ids-file "${SPECIMEN_IDS_FILE}")
 fi
@@ -67,6 +69,7 @@ echo "    Probe bank      : ${PROBE_BANK_DIR:-(latest)}"
 echo "    SAE             : ${SAE_DIR:-(latest)}"
 echo "    SAE labels      : ${SAE_LABELS_PATH:-(latest)}"
 echo "    Top-K features  : ${TOP_K_FEATURES}"
+echo "    Max new tokens  : ${MAX_NEW_TOKENS}"
 echo "    GPU             : ${GPU}"
 echo
 

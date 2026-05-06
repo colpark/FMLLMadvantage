@@ -69,6 +69,7 @@ GRAD_ACCUM="${GRAD_ACCUM:-4}"
 MAX_SEQ="${MAX_SEQ:-1536}"
 EPOCHS="${EPOCHS:-3}"
 QUANTIZE="${QUANTIZE:-none}"
+MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-768}"
 SPECIMEN_IDS_FILE_DEFAULT="runs/holdout_lock/ids.json"
 
 LOG_PREFIX="==> Phase 16 pipeline:"
@@ -191,7 +192,7 @@ echo
 
 echo "${LOG_PREFIX} Stage 4 -- cot_sft_sae single-shot inference"
 
-SPECIMEN_IDS_FILE="${SPECIMEN_IDS_FILE_DEFAULT}" QUANTIZE="${QUANTIZE}" TOP_K_FEATURES="${TOP_K_FEATURES}" LOG_EVERY=5 bash scripts/run_baseline_cot_sft_sae.sh
+SPECIMEN_IDS_FILE="${SPECIMEN_IDS_FILE_DEFAULT}" QUANTIZE="${QUANTIZE}" TOP_K_FEATURES="${TOP_K_FEATURES}" MAX_NEW_TOKENS="${MAX_NEW_TOKENS}" LOG_EVERY=5 bash scripts/run_baseline_cot_sft_sae.sh
 
 echo
 
