@@ -74,6 +74,12 @@ def main(
     grad_accum: int = typer.Option(16, "--grad-accum"),
     max_seq_length: int = typer.Option(2048, "--max-seq-length"),
     seed: int = typer.Option(0, "--seed"),
+    run_id: str = typer.Option(
+        "", "--run-id",
+        help="Override the timestamp-based run id. Required for "
+             "torchrun multi-GPU launches so every rank uses the "
+             "same output directory.",
+    ),
 ) -> None:
     """Run Phase 11 Stage 2 SFT on the synthetic CoT records."""
     if dataset is None:
@@ -87,11 +93,10 @@ def main(
         raise typer.BadParameter(f"dataset not found: {dataset}")
 
     # DDP-safe run_id: under torchrun, every rank executes this script
-    # independently, and each call to generate_run_id (which embeds a
-    # timestamp) would produce a slightly different id, ending up with
-    # one output directory per rank. We need a single shared run_id.
-    # Strategy: rank 0 generates, broadcasts via torch.distributed; other
-    # ranks receive. Falls back to local generation when not distributed.
+    # independently. To get a single shared output directory we accept
+    # the run_id from the shell wrapper (--run-id) so all ranks see
+    # the same value without any NCCL coordination. If not provided,
+    # fall back to local generation (single-GPU path).
     import os as _os                     # noqa: PLC0415
     _local_rank_env = _os.environ.get("LOCAL_RANK")
     _world_size_env = int(_os.environ.get("WORLD_SIZE", "1"))
@@ -100,30 +105,15 @@ def main(
         and int(_local_rank_env) >= 0
         and _world_size_env > 1
     )
-    if _is_distributed:
-        import torch.distributed as dist  # noqa: PLC0415
 
-        if not dist.is_initialized():
-            dist.init_process_group(backend="nccl")
-        if dist.get_rank() == 0:
-            run_id = generate_run_id("cot-sft-stage2")
-        else:
-            run_id = ""
-        obj = [run_id]
-        dist.broadcast_object_list(obj, src=0)
-        run_id = str(obj[0])
-        is_main = dist.get_rank() == 0
-    else:
+    if not run_id:
         run_id = generate_run_id("cot-sft-stage2")
-        is_main = True
+
+    is_main = (not _is_distributed) or int(_local_rank_env) == 0
 
     out_dir = out / run_id
     if is_main:
         out_dir.mkdir(parents=True, exist_ok=True)
-    if _is_distributed:
-        import torch.distributed as dist  # noqa: PLC0415
-
-        dist.barrier()
 
     typer.echo(f"==> Run id      : {run_id}")
     typer.echo(f"==> Output      : {out_dir}")

@@ -81,6 +81,13 @@ def train_sft(
     )
     if is_distributed:
         local_rank = int(local_rank_env)
+        # CRITICAL: bind the current CUDA context to this rank's GPU
+        # *before* any NCCL operation. Otherwise every rank defaults
+        # to GPU 0 and NCCL aborts with "Duplicate GPU detected:
+        # rank N and rank 0 both on CUDA device X" when init_process_group
+        # is invoked (either by us or implicitly by HF Trainer).
+        if torch.cuda.is_available():
+            torch.cuda.set_device(local_rank)
         device_map: Any = {"": local_rank}
     else:
         device_map = "auto"

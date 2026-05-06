@@ -81,7 +81,14 @@ fi
 
 EFFECTIVE_BATCH=$((PER_DEVICE_BS * GRAD_ACCUM * NUM_GPUS))
 
+# Generate the run_id ONCE in the shell so every torchrun rank uses
+# the same value -- avoids having to coordinate via NCCL inside the
+# python process before the device is bound. Override with RUN_ID env
+# var if you want a specific id (useful for resumable runs).
+RUN_ID="${RUN_ID:-$(date -u +%Y%m%d-%H%M%S)-cot-sft-stage2}"
+
 echo "==> Phase 16 Stage 2: SFT on SAE-augmented CoT dataset"
+echo "    Run id         : ${RUN_ID}"
 echo "    Dataset        : ${RESOLVED_DATASET}"
 echo "    Out root       : ${OUT_ROOT}"
 echo "    Base model     : ${BASE_MODEL}"
@@ -107,6 +114,7 @@ PY_ARGS=(
     --per-device-batch-size "${PER_DEVICE_BS}"
     --grad-accum "${GRAD_ACCUM}"
     --max-seq-length "${MAX_SEQ}"
+    --run-id "${RUN_ID}"
 )
 
 if [ "${NUM_GPUS}" -gt 1 ]; then
