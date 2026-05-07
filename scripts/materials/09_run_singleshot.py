@@ -213,6 +213,12 @@ def main(
         "4bit", "--quantize",
         help="'none' | '4bit' | '8bit'.",
     ),
+    batch_size: int = typer.Option(
+        16, "--batch-size",
+        help="Number of specimens to process through the LLM in one "
+             "batched generate() call. Qwen 7B 4-bit on H100 80GB fits "
+             "BS=32 comfortably; 16 is conservative.",
+    ),
     device: str = typer.Option("auto", "--device"),
     log_every: int = typer.Option(10, "--log-every"),
 ) -> None:
@@ -294,6 +300,10 @@ def main(
     tokenizer = AutoTokenizer.from_pretrained(base_model)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
+    # Left-pad for batched causal generation: padding goes to the
+    # left of each prompt so all rows generate from the same final
+    # position regardless of prompt length.
+    tokenizer.padding_side = "left"
 
     load_kwargs: dict = {"device_map": device}
     if quantize == "4bit":
@@ -331,7 +341,10 @@ def main(
     }
     started_run = _now_utc()
 
-    typer.echo(f"==> Starting generation ({len(holdout_ids)} specimens)")
+    typer.echo(
+        f"==> Starting generation ({len(holdout_ids)} specimens, "
+        f"batch_size={batch_size})"
+    )
     with h5py.File(h5_path, "r") as h5, jsonl_path.open("w") as out_f:
         element_names_attr = h5.attrs.get("element_names")
         element_names = (
@@ -340,120 +353,150 @@ def main(
             if element_names_attr is not None else []
         )
 
-        for sid in holdout_ids:
-            n_atoms = int(np.asarray(h5["nsites"][sid]))
-            if n_atoms > max_atoms or n_atoms < 1:
-                counters["skipped_chgnet_error"] += 1
-                continue
-            species_ids = np.asarray(h5["n_atoms_padded"][sid])[:n_atoms]
-            positions = np.asarray(h5["positions_padded"][sid])[:n_atoms]
-            lattice = np.asarray(h5["lattice"][sid])
-            try:
-                structure = structure_from_arrays(
-                    species_ids=species_ids,
-                    positions=positions,
-                    lattice=lattice,
-                    element_names=element_names,
+        # Chunked two-phase processing:
+        #   Phase A: per-specimen forward through CHGNet + probes + SAE
+        #            (CHGNet is per-cell so we still loop, but it's fast)
+        #   Phase B: tokenize all prompts in chunk, batched generate(),
+        #            decode each row
+        #
+        # The LLM generation is the bottleneck (KV-cache + autoregressive
+        # decode); batching N=16 prompts shares that cost.
+        for chunk_start in range(0, len(holdout_ids), batch_size):
+            chunk_ids = holdout_ids[chunk_start : chunk_start + batch_size]
+
+            # Phase A: build per-specimen context for the chunk.
+            ctxs: list[dict] = []
+            for sid in chunk_ids:
+                n_atoms = int(np.asarray(h5["nsites"][sid]))
+                if n_atoms > max_atoms or n_atoms < 1:
+                    counters["skipped_chgnet_error"] += 1
+                    continue
+                species_ids = np.asarray(h5["n_atoms_padded"][sid])[:n_atoms]
+                positions = np.asarray(h5["positions_padded"][sid])[:n_atoms]
+                lattice = np.asarray(h5["lattice"][sid])
+                try:
+                    structure = structure_from_arrays(
+                        species_ids=species_ids,
+                        positions=positions,
+                        lattice=lattice,
+                        element_names=element_names,
+                    )
+                    _, pooled = wrap.encode(structure)
+                except Exception as exc:
+                    counters["skipped_chgnet_error"] += 1
+                    if counters["skipped_chgnet_error"] <= 5:
+                        typer.echo(f"    skip sid={sid}: {exc!r}")
+                    continue
+
+                x = pooled.detach().to(device).float().reshape(1, -1)
+                with torch.no_grad():
+                    x_norm = (x - cls_mean) / cls_std.clamp_min(1.0e-6)
+                    z_row = sae.encode(x_norm).detach().cpu().numpy()[0]
+                probe_outputs_batch = bank.evaluate(x)
+                probe_out = probe_outputs_batch[0]
+
+                sae_feats = _top_k_features_for_row(
+                    z_row, labels=labels, top_k=top_k_features,
                 )
-                _, pooled = wrap.encode(structure)
-            except Exception as exc:
-                counters["skipped_chgnet_error"] += 1
-                if counters["skipped_chgnet_error"] <= 5:
-                    typer.echo(f"    skip sid={sid}: {exc!r}")
+                user_text = _user_message(probe_out, sae_feats)
+                prompt = tokenizer.apply_chat_template(
+                    [
+                        {"role": "system", "content": _SYSTEM_PROMPT},
+                        {"role": "user", "content": user_text},
+                    ],
+                    tokenize=False, add_generation_prompt=True,
+                )
+                ctxs.append({
+                    "sid": int(sid),
+                    "prompt": prompt,
+                    "probe_out": probe_out,
+                    "sae_feats": sae_feats,
+                })
+
+            if not ctxs:
                 continue
 
-            x = pooled.detach().to(device).float().reshape(1, -1)
-            with torch.no_grad():
-                x_norm = (x - cls_mean) / cls_std.clamp_min(1.0e-6)
-                z = sae.encode(x_norm).detach().cpu().numpy()[0]
-            probe_outputs_batch = bank.evaluate(x)
-            probe_out = probe_outputs_batch[0]
-
-            sae_feats = _top_k_features_for_row(
-                z, labels=labels, top_k=top_k_features,
-            )
-            user_text = _user_message(probe_out, sae_feats)
-            messages = [
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": user_text},
-            ]
-            prompt = tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True,
-            )
-            inputs = tokenizer(prompt, return_tensors="pt").to(device)
+            # Phase B: tokenize + generate batched, then decode each row.
+            prompts = [c["prompt"] for c in ctxs]
+            enc = tokenizer(
+                prompts, return_tensors="pt", padding=True, truncation=False,
+            ).to(device)
             t0 = _now_utc()
             with torch.no_grad():
                 out_ids = llm.generate(
-                    **inputs,
+                    **enc,
                     max_new_tokens=max_new_tokens,
                     do_sample=False,
                     pad_token_id=tokenizer.pad_token_id,
                 )
-            gen_ids = out_ids[0, inputs["input_ids"].shape[1] :]
-            raw_text = tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
             t1 = _now_utc()
+            input_len = int(enc["input_ids"].shape[1])
+            gen_ids_batch = out_ids[:, input_len:]
+            raw_texts = tokenizer.batch_decode(
+                gen_ids_batch, skip_special_tokens=True,
+            )
 
-            claim = _parse_final_commit(raw_text)
-            truth = truth_dict(h5, int(sid))
-            correct = is_correct(claim or {}, truth) if claim is not None else False
+            for ctx, raw_text in zip(ctxs, raw_texts, strict=True):
+                raw_text = raw_text.strip()
+                claim = _parse_final_commit(raw_text)
+                truth = truth_dict(h5, ctx["sid"])
+                correct = (
+                    is_correct(claim or {}, truth)
+                    if claim is not None else False
+                )
 
-            record = {
-                "specimen_id": int(sid),
-                "started_utc": t0,
-                "finished_utc": t1,
-                "raw_text": raw_text,
-                "claim": claim,
-                "is_correct": bool(correct),
-                "ground_truth": {
-                    k: (
-                        bool(v) if isinstance(v, np.bool_)
-                        else float(v) if isinstance(v, (np.floating, float))
-                        else int(v) if isinstance(v, (np.integer, int))
-                        else str(v)
-                    )
-                    for k, v in truth.items()
-                },
-                "probe_outputs": {
-                    name: {
-                        "prediction": probe_out[name].get("prediction"),
-                        "confidence": float(
-                            probe_out[name].get("confidence", 0.0)
-                        ),
-                    }
-                    for name in bank.names()
-                },
-                "sae_features": [
-                    [str(lab), float(act)] for lab, act in sae_feats
-                ],
-                "n_sae_features_used": len(sae_feats),
-            }
-            counters["total"] += 1
-            if claim is not None:
-                counters["committed"] += 1
-                if correct:
-                    counters["correct"] += 1
-            else:
-                counters["parse_failure"] += 1
-            out_f.write(json.dumps(record) + "\n")
+                record = {
+                    "specimen_id": ctx["sid"],
+                    "started_utc": t0,
+                    "finished_utc": t1,
+                    "raw_text": raw_text,
+                    "claim": claim,
+                    "is_correct": bool(correct),
+                    "ground_truth": {
+                        k: (
+                            bool(v) if isinstance(v, np.bool_)
+                            else float(v) if isinstance(v, (np.floating, float))
+                            else int(v) if isinstance(v, (np.integer, int))
+                            else str(v)
+                        )
+                        for k, v in truth.items()
+                    },
+                    "probe_outputs": {
+                        name: {
+                            "prediction": ctx["probe_out"][name].get("prediction"),
+                            "confidence": float(
+                                ctx["probe_out"][name].get("confidence", 0.0)
+                            ),
+                        }
+                        for name in bank.names()
+                    },
+                    "sae_features": [
+                        [str(lab), float(act)] for lab, act in ctx["sae_feats"]
+                    ],
+                    "n_sae_features_used": len(ctx["sae_feats"]),
+                }
+                counters["total"] += 1
+                if claim is not None:
+                    counters["committed"] += 1
+                    if correct:
+                        counters["correct"] += 1
+                else:
+                    counters["parse_failure"] += 1
+                out_f.write(json.dumps(record) + "\n")
             out_f.flush()
 
-            del out_ids, gen_ids, inputs
+            del out_ids, gen_ids_batch, enc
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-            if (
-                counters["total"] == 1
-                or counters["total"] % log_every == 0
-                or counters["total"] == len(holdout_ids)
-            ):
-                typer.echo(
-                    f"    {counters['total']:>4}/{len(holdout_ids)} "
-                    f"sid={int(sid):<8} "
-                    f"committed={counters['committed']} "
-                    f"correct={counters['correct']} "
-                    f"parse_failure={counters['parse_failure']} "
-                    f"chgnet_skip={counters['skipped_chgnet_error']}"
-                )
+            typer.echo(
+                f"    {counters['total']:>4}/{len(holdout_ids)} "
+                f"chunk_done={len(ctxs)} "
+                f"committed={counters['committed']} "
+                f"correct={counters['correct']} "
+                f"parse_failure={counters['parse_failure']} "
+                f"chgnet_skip={counters['skipped_chgnet_error']}"
+            )
 
     typer.echo(f"==> JSONL: {jsonl_path}")
     accuracy = counters["correct"] / max(counters["total"], 1)
@@ -492,6 +535,7 @@ def main(
                 "top_k_features": top_k_features,
                 "max_new_tokens": max_new_tokens,
                 "quantize": quantize,
+                "batch_size": batch_size,
                 "n_holdout": len(holdout_ids),
                 "counters": counters,
                 "accuracy": float(accuracy),

@@ -20,6 +20,7 @@
 #   BASE_MODEL        default: Qwen/Qwen2.5-7B-Instruct
 #   MAX_NEW_TOKENS    default: 768
 #   QUANTIZE          default: 4bit ('none' | '4bit' | '8bit')
+#   BATCH_SIZE        default: 16 (LLM batched generate; H100 80GB fits 32+)
 #   TOP_K_FEATURES    default: 8
 #   MAX_ATOMS         default: 80
 #   GPU               default: 0
@@ -34,6 +35,7 @@ CHGNET_MODEL_NAME="${CHGNET_MODEL_NAME:-0.3.0}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
 MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-768}"
 QUANTIZE="${QUANTIZE:-4bit}"
+BATCH_SIZE="${BATCH_SIZE:-16}"
 TOP_K_FEATURES="${TOP_K_FEATURES:-8}"
 MAX_ATOMS="${MAX_ATOMS:-80}"
 GPU="${GPU:-0}"
@@ -44,6 +46,7 @@ EXTRA+=(--chgnet-model-name "${CHGNET_MODEL_NAME}")
 EXTRA+=(--base-model "${BASE_MODEL}")
 EXTRA+=(--max-new-tokens "${MAX_NEW_TOKENS}")
 EXTRA+=(--quantize "${QUANTIZE}")
+EXTRA+=(--batch-size "${BATCH_SIZE}")
 EXTRA+=(--top-k-features "${TOP_K_FEATURES}")
 EXTRA+=(--max-atoms "${MAX_ATOMS}")
 EXTRA+=(--holdout-ids-path "${HOLDOUT_IDS_PATH}")
@@ -70,6 +73,7 @@ echo "    CHGNET_MODEL_NAME : ${CHGNET_MODEL_NAME}"
 echo "    BASE_MODEL        : ${BASE_MODEL}"
 echo "    MAX_NEW_TOKENS    : ${MAX_NEW_TOKENS}"
 echo "    QUANTIZE          : ${QUANTIZE}"
+echo "    BATCH_SIZE        : ${BATCH_SIZE}"
 echo "    TOP_K_FEATURES    : ${TOP_K_FEATURES}"
 echo "    MAX_ATOMS         : ${MAX_ATOMS}"
 echo "    GPU               : ${GPU}"
