@@ -37,6 +37,11 @@ dev = [
     "mypy>=1.11",
     "ipykernel>=6.29",
 ]
+materials = [
+    "mp-api>=0.43",
+    "pymatgen>=2024.2",
+    "chgnet>=0.4.0",
+]
 
 [build-system]
 requires = ["hatchling"]
