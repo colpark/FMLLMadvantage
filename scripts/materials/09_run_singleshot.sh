@@ -38,8 +38,15 @@ QUANTIZE="${QUANTIZE:-4bit}"
 BATCH_SIZE="${BATCH_SIZE:-16}"
 TOP_K_FEATURES="${TOP_K_FEATURES:-8}"
 MAX_ATOMS="${MAX_ATOMS:-80}"
+INCLUDE_SAE="${INCLUDE_SAE:-1}"
 GPU="${GPU:-0}"
 HOLDOUT_IDS_PATH="${HOLDOUT_IDS_PATH:-data/materials_project_v1/holdout_lock/ids.json}"
+if [ "${INCLUDE_SAE}" = "0" ] || [ "${INCLUDE_SAE}" = "false" ]; then
+    DEFAULT_OUT_SUBDIR="cot_sft_no_sae"
+else
+    DEFAULT_OUT_SUBDIR="cot_sft_sae"
+fi
+OUT_SUBDIR="${OUT_SUBDIR:-${DEFAULT_OUT_SUBDIR}}"
 
 EXTRA=()
 EXTRA+=(--chgnet-model-name "${CHGNET_MODEL_NAME}")
@@ -49,7 +56,13 @@ EXTRA+=(--quantize "${QUANTIZE}")
 EXTRA+=(--batch-size "${BATCH_SIZE}")
 EXTRA+=(--top-k-features "${TOP_K_FEATURES}")
 EXTRA+=(--max-atoms "${MAX_ATOMS}")
+EXTRA+=(--out-subdir "${OUT_SUBDIR}")
 EXTRA+=(--holdout-ids-path "${HOLDOUT_IDS_PATH}")
+if [ "${INCLUDE_SAE}" = "0" ] || [ "${INCLUDE_SAE}" = "false" ]; then
+    EXTRA+=(--no-include-sae)
+else
+    EXTRA+=(--include-sae)
+fi
 if [ -n "${ADAPTER_PATH:-}" ]; then
     EXTRA+=(--adapter-path "${ADAPTER_PATH}")
 fi
@@ -74,6 +87,8 @@ echo "    BASE_MODEL        : ${BASE_MODEL}"
 echo "    MAX_NEW_TOKENS    : ${MAX_NEW_TOKENS}"
 echo "    QUANTIZE          : ${QUANTIZE}"
 echo "    BATCH_SIZE        : ${BATCH_SIZE}"
+echo "    INCLUDE_SAE       : ${INCLUDE_SAE}"
+echo "    OUT_SUBDIR        : ${OUT_SUBDIR}"
 echo "    TOP_K_FEATURES    : ${TOP_K_FEATURES}"
 echo "    MAX_ATOMS         : ${MAX_ATOMS}"
 echo "    GPU               : ${GPU}"

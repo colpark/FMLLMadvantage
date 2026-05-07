@@ -163,6 +163,18 @@ def main(
     top_k_features: int = typer.Option(
         8, "--top-k-features",
     ),
+    include_sae: bool = typer.Option(
+        True, "--include-sae/--no-include-sae",
+        help="If False, skip SAE forward and emit prompts without "
+             "SAE_FEATURES. Use to evaluate an adapter trained on "
+             "no-SAE records.",
+    ),
+    out_subdir: str = typer.Option(
+        "cot_sft_sae", "--out-subdir",
+        help="Subdirectory under <out>/ to write into. Override to "
+             "'cot_sft_no_sae' for no-SAE ablation runs so the JSONL "
+             "doesn't collide with the with-SAE result.",
+    ),
     base_model: str = typer.Option(
         "Qwen/Qwen2.5-7B-Instruct", "--base-model",
     ),
@@ -214,30 +226,38 @@ def main(
                 "no probe bank under checkpoints/materials/probes/."
             )
 
-    if sae_dir is None:
-        sae_dir = _latest_dir(Path("checkpoints/materials/sae"))
+    if include_sae:
         if sae_dir is None:
+            sae_dir = _latest_dir(Path("checkpoints/materials/sae"))
+            if sae_dir is None:
+                raise typer.BadParameter(
+                    "no SAE under checkpoints/materials/sae/."
+                )
+        sae_path = sae_dir / "sae.pt"
+        if not sae_path.exists():
+            raise typer.BadParameter(f"missing {sae_path}")
+        if sae_labels_path is None:
+            sae_labels_path = _latest_labels(Path("runs/materials/sae_labels"))
+        if sae_labels_path is None or not sae_labels_path.exists():
             raise typer.BadParameter(
-                "no SAE under checkpoints/materials/sae/."
+                "no labels.json under runs/materials/sae_labels/."
             )
-    sae_path = sae_dir / "sae.pt"
-    if not sae_path.exists():
-        raise typer.BadParameter(f"missing {sae_path}")
-
-    if sae_labels_path is None:
-        sae_labels_path = _latest_labels(Path("runs/materials/sae_labels"))
-    if sae_labels_path is None or not sae_labels_path.exists():
-        raise typer.BadParameter(
-            "no labels.json under runs/materials/sae_labels/."
-        )
+    else:
+        sae_dir = None
+        sae_path = None
+        sae_labels_path = None
 
     if not holdout_ids_path.exists():
         raise typer.BadParameter(f"missing {holdout_ids_path}")
     with holdout_ids_path.open("r") as f:
         holdout_ids = [int(s) for s in json.load(f)]
 
-    run_id = _generate_run_id(f"mat-cot-sft-sae-{len(holdout_ids)}-holdout")
-    out_dir = out / "cot_sft_sae" / run_id
+    slug = (
+        f"mat-cot-sft-sae-{len(holdout_ids)}-holdout"
+        if include_sae else f"mat-cot-sft-no-sae-{len(holdout_ids)}-holdout"
+    )
+    run_id = _generate_run_id(slug)
+    out_dir = out / out_subdir / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
     typer.echo("==> Materials port Stage 9: single-shot inference")
@@ -245,17 +265,25 @@ def main(
     typer.echo(f"    Output          : {out_dir}")
     typer.echo(f"    Adapter         : {adapter_path}")
     typer.echo(f"    Probe bank      : {probe_bank_dir}")
-    typer.echo(f"    SAE             : {sae_path}")
-    typer.echo(f"    SAE labels      : {sae_labels_path}")
-    typer.echo(f"    Top-K features  : {top_k_features}")
+    typer.echo(f"    Include SAE     : {include_sae}")
+    if include_sae:
+        typer.echo(f"    SAE             : {sae_path}")
+        typer.echo(f"    SAE labels      : {sae_labels_path}")
+        typer.echo(f"    Top-K features  : {top_k_features}")
     typer.echo(f"    Holdout ids     : {len(holdout_ids)}")
     typer.echo("")
 
     typer.echo("==> Loading CHGNet...")
     wrap = CHGNetWrap.load(device=device, model_name=chgnet_model_name)
     bank = ProbeBank.load(probe_bank_dir, device=device).eval()
-    sae, cls_mean, cls_std = _load_sae(sae_path, device=device)
-    labels = _load_labels(sae_labels_path)
+    if include_sae:
+        sae, cls_mean, cls_std = _load_sae(sae_path, device=device)
+        labels = _load_labels(sae_labels_path)
+    else:
+        sae = None
+        cls_mean = None
+        cls_std = None
+        labels = {}
 
     typer.echo(f"==> Loading LLM (quantize={quantize})...")
     tokenizer = AutoTokenizer.from_pretrained(base_model)
@@ -350,16 +378,19 @@ def main(
                     continue
 
                 x = pooled.detach().to(device).float().reshape(1, -1)
-                with torch.no_grad():
-                    x_norm = (x - cls_mean) / cls_std.clamp_min(1.0e-6)
-                    z_row = sae.encode(x_norm).detach().cpu().numpy()[0]
+                if include_sae:
+                    with torch.no_grad():
+                        x_norm = (x - cls_mean) / cls_std.clamp_min(1.0e-6)
+                        z_row = sae.encode(x_norm).detach().cpu().numpy()[0]
+                    sae_feats = _top_k_features_for_row(
+                        z_row, labels=labels, top_k=top_k_features,
+                    )
+                else:
+                    sae_feats = []
                 probe_outputs_batch = bank.evaluate(x)
                 probe_out = probe_outputs_batch[0]
 
-                sae_feats = _top_k_features_for_row(
-                    z_row, labels=labels, top_k=top_k_features,
-                )
-                user_text = _user_message(probe_out, sae_feats)
+                user_text = _user_message(probe_out, sae_feats or None)
                 prompt = tokenizer.apply_chat_template(
                     [
                         {"role": "system", "content": _SYSTEM_PROMPT},
@@ -488,12 +519,15 @@ def main(
                 "holdout_ids_path": str(holdout_ids_path),
                 "adapter_path": str(adapter_path),
                 "probe_bank_dir": str(probe_bank_dir),
-                "sae_dir": str(sae_dir),
-                "sae_labels_path": str(sae_labels_path),
+                "include_sae": bool(include_sae),
+                "sae_dir": str(sae_dir) if sae_dir else None,
+                "sae_labels_path": (
+                    str(sae_labels_path) if sae_labels_path else None
+                ),
                 "chgnet_model_name": chgnet_model_name,
                 "base_model": base_model,
                 "max_atoms": max_atoms,
-                "top_k_features": top_k_features,
+                "top_k_features": top_k_features if include_sae else 0,
                 "max_new_tokens": max_new_tokens,
                 "quantize": quantize,
                 "batch_size": batch_size,

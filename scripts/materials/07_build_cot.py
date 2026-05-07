@@ -147,6 +147,11 @@ def main(
         8, "--top-k-features",
         help="How many top-active SAE features to surface per specimen.",
     ),
+    include_sae: bool = typer.Option(
+        True, "--include-sae/--no-include-sae",
+        help="If False, skip SAE entirely (no Step 1b in CoT, no "
+             "SAE_FEATURES in user message). For ablation runs.",
+    ),
     n_specimens: int = typer.Option(
         10000, "--n-specimens",
         help="Number of training specimens to emit records for. The "
@@ -183,22 +188,27 @@ def main(
             raise typer.BadParameter(
                 "no probe bank under checkpoints/materials/probes/."
             )
-    if sae_dir is None:
-        sae_dir = _latest_dir(Path("checkpoints/materials/sae"))
+    if include_sae:
         if sae_dir is None:
+            sae_dir = _latest_dir(Path("checkpoints/materials/sae"))
+            if sae_dir is None:
+                raise typer.BadParameter(
+                    "no SAE under checkpoints/materials/sae/."
+                )
+        sae_path = sae_dir / "sae.pt"
+        if not sae_path.exists():
+            raise typer.BadParameter(f"missing {sae_path}")
+        if sae_labels_path is None:
+            sae_labels_path = _latest_labels(Path("runs/materials/sae_labels"))
+        if sae_labels_path is None or not sae_labels_path.exists():
             raise typer.BadParameter(
-                "no SAE under checkpoints/materials/sae/."
+                "no labels.json under runs/materials/sae_labels/. Run "
+                "scripts/materials/06_label_sae.sh first."
             )
-    sae_path = sae_dir / "sae.pt"
-    if not sae_path.exists():
-        raise typer.BadParameter(f"missing {sae_path}")
-    if sae_labels_path is None:
-        sae_labels_path = _latest_labels(Path("runs/materials/sae_labels"))
-    if sae_labels_path is None or not sae_labels_path.exists():
-        raise typer.BadParameter(
-            "no labels.json under runs/materials/sae_labels/. Run "
-            "scripts/materials/06_label_sae.sh first."
-        )
+    else:
+        sae_dir = None
+        sae_path = None
+        sae_labels_path = None
 
     emb_path = embeddings_dir / "embeddings.npy"
     sid_path = embeddings_dir / "specimen_ids.npy"
@@ -221,23 +231,31 @@ def main(
     typer.echo("==> Materials port Stage 7: build CoT records")
     typer.echo(f"    embeddings_dir : {embeddings_dir}")
     typer.echo(f"    probe_bank_dir : {probe_bank_dir}")
-    typer.echo(f"    sae_dir        : {sae_dir}")
-    typer.echo(f"    sae_labels     : {sae_labels_path}")
+    typer.echo(f"    include_sae    : {include_sae}")
+    if include_sae:
+        typer.echo(f"    sae_dir        : {sae_dir}")
+        typer.echo(f"    sae_labels     : {sae_labels_path}")
+        typer.echo(f"    top_k_features : {top_k_features}")
     typer.echo(f"    n_pool         : {n_pool}")
     typer.echo(f"    n_take         : {n_take}")
-    typer.echo(f"    top_k_features : {top_k_features}")
     typer.echo(f"    out_dir        : {out_dir}")
     typer.echo("")
 
     bank = ProbeBank.load(probe_bank_dir, device=device).eval()
     typer.echo(f"    probes loaded  : {bank.names()}")
 
-    sae, cls_mean, cls_std = _load_sae(sae_path, device=device)
-    typer.echo(
-        f"    SAE config     : in_dim={sae.in_dim} "
-        f"hidden_dim={sae.hidden_dim} k={sae.k}"
-    )
-    labels = _load_labels(sae_labels_path)
+    if include_sae:
+        sae, cls_mean, cls_std = _load_sae(sae_path, device=device)
+        typer.echo(
+            f"    SAE config     : in_dim={sae.in_dim} "
+            f"hidden_dim={sae.hidden_dim} k={sae.k}"
+        )
+        labels = _load_labels(sae_labels_path)
+    else:
+        sae = None
+        cls_mean = None
+        cls_std = None
+        labels = {}
 
     jsonl_path = out_dir / "records.jsonl"
     n_written = 0
@@ -248,13 +266,16 @@ def main(
             batch_emb_np = take_emb[start : start + batch_size]
             batch_sids = take_sids[start : start + batch_size]
             x = torch.from_numpy(batch_emb_np).to(device)
-            with torch.no_grad():
-                x_norm = (x - cls_mean) / cls_std.clamp_min(1.0e-6)
-                z = sae.encode(x_norm)
+            if include_sae:
+                with torch.no_grad():
+                    x_norm = (x - cls_mean) / cls_std.clamp_min(1.0e-6)
+                    z = sae.encode(x_norm)
+                sae_features_batch = _top_k_sae_features(
+                    z, labels=labels, top_k=top_k_features,
+                )
+            else:
+                sae_features_batch = [None] * x.shape[0]
             probe_outputs_batch = bank.evaluate(x)
-            sae_features_batch = _top_k_sae_features(
-                z, labels=labels, top_k=top_k_features,
-            )
             for sid, probe_out, sae_feat in zip(
                 batch_sids, probe_outputs_batch, sae_features_batch,
                 strict=True,
@@ -296,13 +317,16 @@ def main(
                 "h5_path": str(h5_path),
                 "embeddings_dir": str(embeddings_dir),
                 "probe_bank_dir": str(probe_bank_dir),
-                "sae_dir": str(sae_dir),
-                "sae_labels_path": str(sae_labels_path),
+                "include_sae": bool(include_sae),
+                "sae_dir": str(sae_dir) if sae_dir else None,
+                "sae_labels_path": (
+                    str(sae_labels_path) if sae_labels_path else None
+                ),
                 "n_pool": n_pool,
                 "n_records": n_written,
                 "n_consistent": n_consistent,
                 "n_with_sae_features": n_with_sae,
-                "top_k_features": top_k_features,
+                "top_k_features": top_k_features if include_sae else 0,
                 "batch_size": batch_size,
                 "seed": seed,
             },

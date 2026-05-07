@@ -194,9 +194,19 @@ def _per_axis_correct(claim: dict, gt: dict) -> dict:
 def main(
     input_path: Path | None = typer.Option(
         None, "--input", "-i",
-        help="cot_sft_sae records.jsonl. Default: latest under "
+        help="cot_sft records.jsonl. Default: latest under "
              "runs/materials/holdout/cot_sft_sae/. Use the .repaired.jsonl "
              "version if available -- it has more parsed claims.",
+    ),
+    input_subdir: str = typer.Option(
+        "cot_sft_sae", "--input-subdir",
+        help="Subdir under runs/materials/holdout/ to auto-discover from. "
+             "Use 'cot_sft_no_sae' for the no-SAE ablation.",
+    ),
+    out_subdir: str = typer.Option(
+        "hybrid", "--out-subdir",
+        help="Subdir under <out>/ to write into. Override to "
+             "'hybrid_no_sae' for the no-SAE ablation.",
     ),
     h5_path: Path = typer.Option(
         Path("data/materials_project_v1/specimens.h5"), "--h5-path",
@@ -211,14 +221,14 @@ def main(
 
     if input_path is None:
         # Prefer .repaired.jsonl if both exist for the latest run.
-        cot_dir = Path("runs/materials/holdout/cot_sft_sae")
+        cot_dir = Path("runs/materials/holdout") / input_subdir
         latest = (
             sorted(cot_dir.glob("*"), key=lambda p: p.stat().st_mtime,
                    reverse=True)[:1]
         )
         if not latest:
             raise typer.BadParameter(
-                "no cot_sft_sae run under runs/materials/holdout/cot_sft_sae/"
+                f"no run under runs/materials/holdout/{input_subdir}/"
             )
         run_dir = latest[0]
         repaired = run_dir / "records.repaired.jsonl"
@@ -229,8 +239,8 @@ def main(
     if not h5_path.exists():
         raise typer.BadParameter(f"missing {h5_path}")
 
-    run_id = _generate_run_id("mat-hybrid-200-holdout")
-    out_dir = out / "hybrid" / run_id
+    run_id = _generate_run_id(f"mat-{out_subdir}-200-holdout")
+    out_dir = out / out_subdir / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
     typer.echo("==> Materials port Stage 9c: hybrid LLM+probe scoring")

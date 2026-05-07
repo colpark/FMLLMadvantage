@@ -27,9 +27,13 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
 
 H5_PATH="${H5_PATH:-data/materials_project_v1/specimens.h5}"
+INPUT_SUBDIR="${INPUT_SUBDIR:-cot_sft_sae}"
+OUT_SUBDIR="${OUT_SUBDIR:-hybrid}"
 
 EXTRA=()
 EXTRA+=(--h5-path "${H5_PATH}")
+EXTRA+=(--input-subdir "${INPUT_SUBDIR}")
+EXTRA+=(--out-subdir "${OUT_SUBDIR}")
 if [ -n "${INPUT:-}" ]; then
     EXTRA+=(--input "${INPUT}")
 fi

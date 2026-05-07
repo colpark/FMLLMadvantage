@@ -27,11 +27,27 @@ cd "${REPO_ROOT}"
 
 N_SPECIMENS="${N_SPECIMENS:-10000}"
 TOP_K_FEATURES="${TOP_K_FEATURES:-8}"
+INCLUDE_SAE="${INCLUDE_SAE:-1}"
 GPU="${GPU:-0}"
+# Default output root depends on whether SAE features are included,
+# so the no-SAE ablation lands in a separate dir for downstream
+# stages to find via their own latest-discovery.
+if [ "${INCLUDE_SAE}" = "0" ] || [ "${INCLUDE_SAE}" = "false" ]; then
+    DEFAULT_OUT="runs/materials/cot_datasets_no_sae"
+else
+    DEFAULT_OUT="runs/materials/cot_datasets_sae"
+fi
+OUT_ROOT="${OUT_ROOT:-${DEFAULT_OUT}}"
 
 EXTRA=()
 EXTRA+=(--n-specimens "${N_SPECIMENS}")
 EXTRA+=(--top-k-features "${TOP_K_FEATURES}")
+EXTRA+=(--out "${OUT_ROOT}")
+if [ "${INCLUDE_SAE}" = "0" ] || [ "${INCLUDE_SAE}" = "false" ]; then
+    EXTRA+=(--no-include-sae)
+else
+    EXTRA+=(--include-sae)
+fi
 if [ -n "${EMBEDDINGS_DIR:-}" ]; then
     EXTRA+=(--embeddings-dir "${EMBEDDINGS_DIR}")
 fi
@@ -52,6 +68,8 @@ echo "    SAE_DIR         : ${SAE_DIR:-(latest)}"
 echo "    SAE_LABELS_PATH : ${SAE_LABELS_PATH:-(latest)}"
 echo "    N_SPECIMENS     : ${N_SPECIMENS}"
 echo "    TOP_K_FEATURES  : ${TOP_K_FEATURES}"
+echo "    INCLUDE_SAE     : ${INCLUDE_SAE}"
+echo "    OUT_ROOT        : ${OUT_ROOT}"
 echo "    GPU             : ${GPU}"
 echo
 

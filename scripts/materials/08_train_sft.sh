@@ -44,7 +44,7 @@ PER_DEVICE_BS="${PER_DEVICE_BS:-1}"
 GRAD_ACCUM="${GRAD_ACCUM:-16}"
 MAX_SEQ="${MAX_SEQ:-2048}"
 NUM_GPUS="${NUM_GPUS:-1}"
-OUT_ROOT="checkpoints/materials/cot-sft-sae"
+OUT_ROOT="${OUT_ROOT:-checkpoints/materials/cot-sft-sae}"
 
 if [ -z "${GPUS:-}" ]; then
     if [ "${NUM_GPUS}" -ge 4 ]; then
@@ -57,12 +57,13 @@ if [ -z "${GPUS:-}" ]; then
 fi
 
 # Resolve dataset path
+DATASET_ROOT="${DATASET_ROOT:-runs/materials/cot_datasets_sae}"
 if [ -n "${DATASET:-}" ]; then
     RESOLVED_DATASET="${DATASET}"
 else
-    RESOLVED_DATASET="$(ls -td runs/materials/cot_datasets_sae/*/records.jsonl 2>/dev/null | head -1 || true)"
+    RESOLVED_DATASET="$(ls -td ${DATASET_ROOT}/*/records.jsonl 2>/dev/null | head -1 || true)"
     if [ -z "${RESOLVED_DATASET}" ]; then
-        echo "ERROR: no records.jsonl under runs/materials/cot_datasets_sae/." >&2
+        echo "ERROR: no records.jsonl under ${DATASET_ROOT}/." >&2
         echo "       Run scripts/materials/07_build_cot.sh first." >&2
         exit 2
     fi
