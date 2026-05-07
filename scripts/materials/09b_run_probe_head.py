@@ -110,7 +110,14 @@ def _claim_from_probes(probe_out: dict) -> dict:
 
 
 def _per_axis_correct(claim: dict, gt: dict) -> dict:
-    """Per-axis breakdown of correctness for diagnostic purposes."""
+    """Per-axis breakdown of correctness for diagnostic purposes.
+
+    The space_group axis treats -1 (sentinel for "missing") as
+    automatic failure on either side, so missing-data bugs can't
+    inflate accuracy via -1==-1 spurious matches.
+    """
+    claim_sg = int(claim["space_group"])
+    gt_sg = int(gt["space_group"])
     return {
         "formation_energy": (
             abs(float(claim["formation_energy"]) - gt["formation_energy"]) <= 0.05
@@ -122,7 +129,7 @@ def _per_axis_correct(claim: dict, gt: dict) -> dict:
         "band_gap_class": (
             str(claim["band_gap_class"]).lower() == gt["band_gap_class"].lower()
         ),
-        "space_group": int(claim["space_group"]) == gt["space_group"],
+        "space_group": claim_sg == gt_sg and claim_sg >= 1 and gt_sg >= 1,
     }
 
 

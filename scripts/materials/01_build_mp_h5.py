@@ -22,6 +22,7 @@ from __future__ import annotations
 import gzip
 import json
 import sys
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -47,6 +48,39 @@ def _crystal_system_id(name: str | None) -> int:
         if cs == name_l:
             return i
     return -1
+
+
+def _read_space_group(rec: dict) -> int:
+    """Read space group number from a raw record, handling both
+    'space_group_number' (legacy normalized name) and 'number'
+    (mp-api pydantic field name).
+
+    Returns -1 if missing or out-of-range. Using -1 as the sentinel
+    (NOT 1) lets downstream correctness checks distinguish "we don't
+    know" from "this is sg=1 (P1, triclinic)".
+    """
+    sym = rec.get("symmetry") or {}
+    if not isinstance(sym, dict):
+        return -1
+    sg = sym.get("space_group_number")
+    if sg is None:
+        sg = sym.get("number")
+    if sg is None:
+        return -1
+    try:
+        n = int(sg)
+    except (TypeError, ValueError):
+        return -1
+    if 1 <= n <= 230:
+        return n
+    return -1
+
+
+def _read_crystal_system(rec: dict) -> str | None:
+    sym = rec.get("symmetry") or {}
+    if not isinstance(sym, dict):
+        return None
+    return sym.get("crystal_system")
 
 
 def _record_paths(raw_dir: Path) -> list[Path]:
@@ -185,13 +219,33 @@ def main(
         dtype=np.float32,
     )
     sg_num_arr = np.array(
-        [int((r.get("symmetry") or {}).get("space_group_number") or 1) for r in keep_records],
+        [_read_space_group(r) for r in keep_records],
         dtype=np.int32,
     )
     cs_id_arr = np.array(
-        [_crystal_system_id((r.get("symmetry") or {}).get("crystal_system")) for r in keep_records],
+        [_crystal_system_id(_read_crystal_system(r)) for r in keep_records],
         dtype=np.int32,
     )
+
+    # Mode-collapse sanity check: if any field has fewer unique
+    # values than we'd expect, the field-name plumbing is probably
+    # broken. Loud warning saves an hour of downstream confusion.
+    def _check_distribution(name: str, arr: np.ndarray, min_unique: int) -> None:
+        unique_vals = sorted(set(int(x) for x in arr.tolist()))
+        n_unique = len(unique_vals)
+        typer.echo(f"    {name:<25s} unique={n_unique}")
+        if n_unique < min_unique:
+            top = Counter(int(x) for x in arr.tolist()).most_common(5)
+            typer.echo(
+                f"    WARNING: {name} has only {n_unique} unique value(s); "
+                f"top counts = {top}. This usually means the source field "
+                f"name is wrong in the raw JSON; check 00_download_mp.py "
+                f"and the symmetry dict shape.",
+                err=True,
+            )
+
+    _check_distribution("space_group_number", sg_num_arr, min_unique=20)
+    _check_distribution("crystal_system_id", cs_id_arr, min_unique=4)
 
     species_padded = np.full((n, max_atoms), -1, dtype=np.int8)
     positions_padded = np.zeros((n, max_atoms, 3), dtype=np.float32)

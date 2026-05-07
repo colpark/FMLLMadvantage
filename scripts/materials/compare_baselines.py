@@ -87,8 +87,10 @@ def _per_axis_correct_from_record(rec: dict) -> dict[str, bool]:
     except (TypeError, ValueError, KeyError):
         out["band_gap_class"] = False
     try:
+        claim_sg = int(claim.get("space_group", -1))
+        gt_sg = int(gt["space_group"])
         out["space_group"] = (
-            int(claim.get("space_group", -1)) == int(gt["space_group"])
+            claim_sg == gt_sg and claim_sg >= 1 and gt_sg >= 1
         )
     except (TypeError, ValueError, KeyError):
         out["space_group"] = False

@@ -192,10 +192,18 @@ def _doc_to_dict(doc: object) -> dict:
             )
             if hasattr(symmetry, k)
         }
-        sym_dict["space_group_symbol"] = sym_dict.pop("symbol", None)
-        sym_dict["space_group_number"] = sym_dict.pop("number", None)
     else:
         sym_dict = symmetry
+
+    # Normalize symmetry field names: mp-api's pydantic model uses
+    # 'number' / 'symbol', but downstream code (01_build_mp_h5) reads
+    # 'space_group_number' / 'space_group_symbol'. Forward-compatible
+    # rename with both keys present.
+    if isinstance(sym_dict, dict):
+        if "space_group_number" not in sym_dict and "number" in sym_dict:
+            sym_dict["space_group_number"] = sym_dict["number"]
+        if "space_group_symbol" not in sym_dict and "symbol" in sym_dict:
+            sym_dict["space_group_symbol"] = sym_dict["symbol"]
 
     return {
         "material_id": str(_g("material_id", "")),

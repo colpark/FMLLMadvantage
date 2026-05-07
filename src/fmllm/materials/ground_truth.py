@@ -103,9 +103,12 @@ def is_correct(claim: dict, gt: dict) -> bool:
       * e_above_hull within 0.025 eV/atom
       * is_stable matches exactly
       * band_gap_class matches exactly (metal / narrow / wide)
-      * space_group exact match
+      * space_group exact match (-1 sentinel never counts as a match)
 
-    Returns True iff all five components are correct.
+    Returns True iff all five components are correct. The -1 guard
+    on space_group prevents missing-data sentinels in the HDF5
+    from spuriously inflating accuracy when both the claim and the
+    ground truth default to -1.
     """
     if not claim:
         return False
@@ -114,7 +117,9 @@ def is_correct(claim: dict, gt: dict) -> bool:
         e_hull_ok = abs(float(claim.get("e_above_hull", 999.0)) - gt["e_above_hull"]) <= 0.025
         stable_ok = bool(claim.get("is_stable", False)) == bool(gt["is_stable"])
         bg_ok = str(claim.get("band_gap_class", "")).lower() == gt["band_gap_class"].lower()
-        sg_ok = int(claim.get("space_group", -1)) == gt["space_group"]
+        claim_sg = int(claim.get("space_group", -1))
+        gt_sg = int(gt["space_group"])
+        sg_ok = claim_sg == gt_sg and gt_sg >= 1 and claim_sg >= 1
     except (TypeError, ValueError):
         return False
     return e_form_ok and e_hull_ok and stable_ok and bg_ok and sg_ok
