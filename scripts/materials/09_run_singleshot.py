@@ -33,7 +33,6 @@ Depends on:
 from __future__ import annotations
 
 import json
-import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -47,9 +46,6 @@ import yaml
 
 
 app = typer.Typer(add_completion=False, no_args_is_help=False)
-
-
-_FINAL_RE = re.compile(r"Final commit:\s*(\{.*?\})", re.DOTALL)
 
 
 def _now_utc() -> str:
@@ -80,50 +76,15 @@ def _latest_labels(parent: Path) -> Path | None:
 
 
 def _parse_final_commit(text: str) -> dict[str, Any] | None:
-    """Extract the first balanced JSON object after 'Final commit:'."""
-    idx = text.find("Final commit:")
-    if idx < 0:
-        return None
-    sub = text[idx:]
-    brace_start = sub.find("{")
-    if brace_start < 0:
-        return None
-    depth = 0
-    in_string = False
-    escape = False
-    end = -1
-    for i in range(brace_start, len(sub)):
-        c = sub[i]
-        if escape:
-            escape = False
-            continue
-        if c == "\\":
-            escape = True
-            continue
-        if c == '"':
-            in_string = not in_string
-            continue
-        if in_string:
-            continue
-        if c == "{":
-            depth += 1
-        elif c == "}":
-            depth -= 1
-            if depth == 0:
-                end = i + 1
-                break
-    if end < 0:
-        m = _FINAL_RE.search(text)
-        if m is None:
-            return None
-        payload = m.group(1)
-    else:
-        payload = sub[brace_start:end]
-    try:
-        data = json.loads(payload)
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
+    """Lenient Final-commit JSON extraction.
+
+    Delegates to :func:`fmllm.materials.parse_commit.parse_final_commit`
+    which handles ``Final commit:``, ``Final commit :``, untagged
+    JSON tails, Python-style booleans, and trailing commas.
+    """
+    from fmllm.materials.parse_commit import parse_final_commit as _impl  # noqa: PLC0415
+
+    return _impl(text)
 
 
 def _load_sae(
