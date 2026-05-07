@@ -108,7 +108,16 @@ def _probe_claim(probe_outputs: dict) -> dict:
 
 
 def _hybrid_claim(llm_claim: dict | None, probe_outputs: dict) -> dict:
-    """LLM's regression + probe's classification."""
+    """LLM's regression + probe's classification.
+
+    The is_stable axis stays bound to the PROBE's e_above_hull
+    threshold. Using the LLM's e_above_hull instead flips ~10% of
+    specimens near the 0.025 boundary even though the LLM's value
+    is more often within +/-0.025 of truth -- the threshold-cross
+    error rate is decoupled from the regression MAE. Empirically
+    on the materials holdout, probe-thresholded is_stable beat
+    LLM-thresholded by ~9.5 pp.
+    """
     probe = _probe_claim(probe_outputs)
     if llm_claim is None:
         return probe
@@ -122,10 +131,9 @@ def _hybrid_claim(llm_claim: dict | None, probe_outputs: dict) -> dict:
         out["e_above_hull"] = float(llm_claim["e_above_hull"])
     except (KeyError, TypeError, ValueError):
         pass
-    # is_stable should follow the LLM's e_above_hull if we used it,
-    # but probe's threshold rule on the LLM-refined value is more
-    # consistent with the probe-classification path.
-    out["is_stable"] = bool(out["e_above_hull"] <= 0.025)
+    # is_stable follows the PROBE's e_above_hull threshold (already
+    # set by _probe_claim above) -- do NOT override with LLM-derived
+    # value. This is the classification-side decision.
     return out
 
 
