@@ -80,16 +80,18 @@ src/fmllm/materials/
   synthetic_cot.py      # materials-specific CoT generator
 
 scripts/materials/
-  00_download_mp.{py,sh}
-  01_build_mp_h5.{py,sh}
-  02_lock_holdout.{py,sh}
-  03_encode.{py,sh}                   # to be ported -- mirrors LJ encode steps
-  04_train_probes.{py,sh}             # to be ported -- mirrors train_probe_bank
-  05_train_sae.{py,sh}                # to be ported -- mirrors train_sae
-  06_label_sae.{py,sh}                # to be ported -- mirrors label_sae_features
-  07_build_cot.{py,sh}                # to be ported -- mirrors build_cot_dataset_with_sae
+  00_download_mp.{py,sh}              # MP API → raw JSONL
+  01_build_mp_h5.{py,sh}              # raw JSONL → HDF5 specimens
+  02_lock_holdout.{py,sh}             # stratified 200-holdout sample
+  03_encode.{py,sh}                   # CHGNet forward, cache pooled embeddings
+  04_train_probes.{py,sh}             # 5 probes on cached embeddings
+  05_train_sae.{py,sh}                # Top-K SAE 256/16 + dead-feature resampling
+  06_label_sae.{py,sh}                # label every SAE feature by attribute correlation
+  06b_diagnose_sae.{py,sh}            # SAE health diagnostic (dead, overlap, recon)
+  07_build_cot.{py,sh}                # synthetic CoT records for SFT
   08_train_sft.sh                     # thin wrapper over existing train_cot_sft.py
-  09_run_singleshot.{py,sh}           # to be ported -- mirrors run_baseline_cot_sft_sae
+  09_run_singleshot.{py,sh}           # held-out 200 single-shot inference
+  10_benchmark_chgnet.{py,sh}         # CHGNet sanity check vs published MAE
 
 data/materials_project_v1/
   raw/                     # raw API responses (compressed JSON)
@@ -110,34 +112,31 @@ runs/materials/
   comparisons/             # side-by-side outputs
 ```
 
-## Status of stages at handover
+## Status of stages
 
 | Stage | File | Status |
 |---|---|---|
-| 1 download | `scripts/materials/00_download_mp.{py,sh}` | **Implemented** in this commit |
-| 2 build h5 | `scripts/materials/01_build_mp_h5.{py,sh}` | **Implemented** |
-| 3 lock holdout | `scripts/materials/02_lock_holdout.{py,sh}` | **Implemented** |
-| 4 encode | `scripts/materials/03_encode.{py,sh}` | **To be ported** -- minor wrapper around CHGNet wrap class |
-| 5 probes | `scripts/materials/04_train_probes.{py,sh}` | **To be ported** -- changes vs LJ are the probe targets |
-| 6 SAE | `scripts/materials/05_train_sae.{py,sh}` | **To be ported** -- reuses `TopKSAE` class directly |
-| 7 SAE labels | `scripts/materials/06_label_sae.{py,sh}` | **To be ported** -- swap LJ attribute set for materials attribute set |
-| 8 CoT records | `scripts/materials/07_build_cot.{py,sh}` | **To be ported** -- uses materials `synthetic_cot` (already implemented) |
-| 9 SFT | `scripts/materials/08_train_sft.sh` | Direct wrapper over existing `train_cot_sft.py` (general) |
-| 10 Inference | `scripts/materials/09_run_singleshot.{py,sh}` | **To be ported** -- mirrors `run_baseline_cot_sft_sae.py` |
-| Module: `src/fmllm/materials/dataset.py` | | **Implemented** |
-| Module: `src/fmllm/materials/chgnet_wrap.py` | | **Implemented** |
-| Module: `src/fmllm/materials/synthetic_cot.py` | | **Implemented** |
-| Module: `src/fmllm/materials/ground_truth.py` | | **Implemented** |
-| Tests | `tests/test_materials_synthetic_cot.py` | **Implemented** (CPU) |
+| 1 download | `scripts/materials/00_download_mp.{py,sh}` | **Done** |
+| 2 build h5 | `scripts/materials/01_build_mp_h5.{py,sh}` | **Done** |
+| 3 lock holdout | `scripts/materials/02_lock_holdout.{py,sh}` | **Done** |
+| 4 encode | `scripts/materials/03_encode.{py,sh}` | **Done** (50K specimens, 46817 kept) |
+| 5 probes | `scripts/materials/04_train_probes.{py,sh}` | **Done** (5 probes trained) |
+| 6 SAE | `scripts/materials/05_train_sae.{py,sh}` | **Done** (256/16, 4.3% dead, validated) |
+| 7 SAE labels | `scripts/materials/06_label_sae.{py,sh}` | **Done** |
+| 7b diagnostic | `scripts/materials/06b_diagnose_sae.{py,sh}` | **Done** (sweep across 3 configs) |
+| 8 CoT records | `scripts/materials/07_build_cot.{py,sh}` | **Done** |
+| 9 SFT | `scripts/materials/08_train_sft.sh` | **Done** (wrapper over `train_cot_sft.py`) |
+| 10 Inference | `scripts/materials/09_run_singleshot.{py,sh}` | **Done** |
+| Benchmark | `scripts/materials/10_benchmark_chgnet.{py,sh}` | **Done** (formation MAE 0.0315 vs 0.030 published) |
+| Module: `src/fmllm/materials/dataset.py` | | **Done** |
+| Module: `src/fmllm/materials/chgnet_wrap.py` | | **Done** |
+| Module: `src/fmllm/materials/synthetic_cot.py` | | **Done** |
+| Module: `src/fmllm/materials/ground_truth.py` | | **Done** |
+| Module: `src/fmllm/materials/labels.py` | | **Done** |
+| Tests | `tests/test_materials_*.py` | **Done** (18 CPU tests) |
 
-The "to be ported" scripts are mechanically obvious copies of the
-LJ scripts; each is ~150-300 lines that change three things (FM
-loader, probe targets / attribute extractor, output paths). I've
-left them as intentional follow-ups for one of two reasons:
-they need at least a smoke run on the actual data before the
-implementation can be locked, *and* the fastest dev loop is to
-get the data through the pipeline first, then iterate on the
-analysis scripts.
+The pipeline is end-to-end runnable. Stage 7-9 are the new bits;
+stages 1-6 + benchmark were already validated in earlier commits.
 
 ## Why the "verifier later" decision
 

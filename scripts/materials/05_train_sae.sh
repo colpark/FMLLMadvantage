@@ -28,11 +28,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
 
-HIDDEN_DIM="${HIDDEN_DIM:-1024}"
-K="${K:-32}"
+# Defaults validated 2026-05-07 on 50K MP specimens with CHGNet 64-dim
+# pooled embedding. 256/16 with 500-step resampling produced 4.3% dead
+# features, 95.7% coverage, and acceptable reconstruction MSE (0.025 in
+# normalized space). 1024/32 had 19% dead and severe mode collapse.
+HIDDEN_DIM="${HIDDEN_DIM:-256}"
+K="${K:-16}"
 EPOCHS="${EPOCHS:-30}"
 BATCH_SIZE="${BATCH_SIZE:-256}"
-RESAMPLE_EVERY="${RESAMPLE_EVERY:-1000}"
+RESAMPLE_EVERY="${RESAMPLE_EVERY:-500}"
 RESAMPLE_WINDOW="${RESAMPLE_WINDOW:-0}"
 RESAMPLE_THRESHOLD="${RESAMPLE_THRESHOLD:-0}"
 GPU="${GPU:-0}"
