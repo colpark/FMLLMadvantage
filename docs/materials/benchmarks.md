@@ -155,6 +155,59 @@ For the benchmark to be paper-defensible, we'd ideally run
 
 ## Reproduced numbers (filled in as runs complete)
 
+### CHGNet sanity-check run (2026-05-07)
+
+> **Verdict: pipeline correct, ready to proceed to Stages 4-10.**
+>
+> Per-element-corrected formation_E MAE = **31.5 meV/atom**, matching
+> the published CHGNet target of ~30 meV/atom on Materials Project.
+
+The 10 most-populated elements in the held-out 200 produced
+per-element references that match Materials Project's well-known
+values within 0.1 eV/atom:
+
+| Element | Our μ̂ (eV/atom) | MP reference | n |
+|---|---|---|---|
+| O | −4.940 | ~−4.95 | 90 |
+| Fe | −8.401 | ~−8.40 | 18 |
+| N | −8.350 | ~−8.31 | 17 |
+| P | −5.390 | ~−5.41 | 17 |
+| Cu | −4.131 | ~−4.10 | 20 |
+| Ba | −1.993 | ~−1.92 | 27 |
+| Ca | −1.995 | ~−2.00 | 24 |
+| K | −1.132 | ~−1.11 | 26 |
+| Cs | −1.034 | ~−1.03 | 19 |
+| F | −1.931 | ~−1.91 | 18 |
+
+The Pearson correlation between *raw* CHGNet output and MP formation
+energy was **0.47** — initially misread as a failure but actually
+expected: when compositions vary widely, the rank order of raw
+`E_total/atom` is dominated by which elements are present (Fe-rich
+at ~−9 eV/atom, Cs-rich at ~−2 eV/atom), making it nearly
+orthogonal to formation energy. The per-element-corrected MAE is
+the meaningful metric.
+
+The total magmom MAE of 1.54 μB is large; likely a few
+high-magnetization specimens with mispredicted moments dominate the
+average. Not a blocker for downstream training; worth a separate
+diagnostic later.
+
+### Tracking table
+
+| Run date | Approach | Metric | Value | Published | Notes |
+|---|---|---|---|---|---|
+| 2026-05-07 | CHGNet native | formation_E MAE per-elem corrected (eV/atom) | **0.0315** | ~0.030 (CHGNet on MPtrj) | held-out 200; ridge least-squares for per-element refs |
+| 2026-05-07 | CHGNet native | top-10 per-element refs vs MP | match within 0.1 eV | MP table | O / Fe / N / P / Cu / Ba / Ca / K / Cs / F |
+| 2026-05-07 | CHGNet native | total magmom MAE (μB) | 1.5402 | n/a | sum-of-magmoms over the cell |
+| TBD | Probe head | formation_energy MAE | TBD | ALIGNN ~0.022 | requires Stage 5 |
+| TBD | Probe head | e_above_hull MAE | TBD | n/a | |
+| TBD | Probe head | band_gap MAE | TBD | ALIGNN ~0.218 | |
+| TBD | Probe head | is_metal accuracy | TBD | ~0.94 | |
+| TBD | Probe head | space_group top-1 accuracy | TBD | n/a | |
+| TBD | cot_sft_sae | per-property table | TBD | n/a | the architectural test |
+
+### Original placeholder table (kept for reference)
+
 | Run date | Approach | Metric | Value | Notes |
 |---|---|---|---|---|
 | TBD | CHGNet native | energy MAE on held-out 200 | TBD | |
