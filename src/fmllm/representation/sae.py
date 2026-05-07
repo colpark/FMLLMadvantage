@@ -107,6 +107,104 @@ class TopKSAE(nn.Module):
     def num_parameters(self) -> int:
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
+    @torch.no_grad()
+    def resample_dead_features(
+        self,
+        activation_history: Tensor,
+        x_batch_normalized: Tensor,
+        threshold: int = 0,
+        optimizer: Any | None = None,
+        encoder_init_scale: float = 0.2,
+    ) -> int:
+        """Reinitialize features that haven't fired in the recent window.
+
+        Bricken et al. 2023 (Anthropic) recipe for keeping Top-K SAEs
+        from accumulating dead features:
+
+          1. Find features whose recent fire-count <= threshold.
+          2. Sample input rows proportional to per-row reconstruction
+             error (high-error rows reveal directions the SAE doesn't
+             yet cover).
+          3. For each dead feature, set its decoder column to a
+             unit-norm copy of the sampled row's residual; reset its
+             encoder row to the same direction (scaled smaller); zero
+             the bias.
+          4. Reset the optimizer's first/second moment for the
+             reinitialized weights so the new direction isn't fought
+             by stale momentum.
+
+        Args:
+            activation_history: ``(hidden_dim,)`` count of fires in the
+                most recent training window.
+            x_batch_normalized: ``(B, in_dim)`` batch in the
+                cls-normalized space the SAE works in.
+            threshold: features with <= this count are considered dead.
+            optimizer: AdamW (or similar) optimizer holding the SAE
+                parameters. Required to reset the moments.
+            encoder_init_scale: how strongly to push the encoder
+                toward the new direction (0.2 in Anthropic's reference).
+
+        Returns:
+            The number of features reinitialized.
+        """
+        device = self.encoder.weight.device
+        history = activation_history.to(device)
+        dead_idx = torch.where(history <= threshold)[0]
+        n_dead = int(dead_idx.numel())
+        if n_dead == 0:
+            return 0
+        if x_batch_normalized.numel() == 0:
+            return 0
+
+        x = x_batch_normalized.to(device)
+        recon, _ = self(x)
+        per_row_err = ((x - recon) ** 2).sum(dim=-1)         # (B,)
+        if float(per_row_err.sum().item()) <= 0.0:
+            # All rows reconstruct perfectly; nothing to bias toward.
+            return 0
+        probs = per_row_err / per_row_err.sum()
+        sampled = torch.multinomial(probs, n_dead, replacement=True)
+        new_dirs = (x[sampled] - self.pre_bias)              # (n_dead, in_dim)
+        norms = new_dirs.norm(dim=-1, keepdim=True).clamp_min(1.0e-8)
+        new_dirs_unit = new_dirs / norms
+
+        # Decoder is shape (in_dim, hidden_dim); column j is the
+        # direction added to the residual when feature j is active.
+        self.decoder.weight.data[:, dead_idx] = new_dirs_unit.T
+
+        # Encoder is shape (hidden_dim, in_dim); row j is the
+        # direction projected onto x to compute z_j.
+        self.encoder.weight.data[dead_idx] = new_dirs_unit * encoder_init_scale
+        self.encoder.bias.data[dead_idx] = 0.0
+
+        # Reset Adam-style optimizer moments so the new direction is
+        # not pulled back by stale momentum from the dead direction.
+        if optimizer is not None:
+            for group in optimizer.param_groups:
+                for p in group.get("params", []):
+                    state = optimizer.state.get(p, None)
+                    if not state:
+                        continue
+                    # Encoder weight rows
+                    if p is self.encoder.weight:
+                        for key in ("exp_avg", "exp_avg_sq"):
+                            if key in state:
+                                state[key][dead_idx] = 0.0
+                    # Encoder bias entries
+                    elif p is self.encoder.bias:
+                        for key in ("exp_avg", "exp_avg_sq"):
+                            if key in state:
+                                state[key][dead_idx] = 0.0
+                    # Decoder weight columns
+                    elif p is self.decoder.weight:
+                        for key in ("exp_avg", "exp_avg_sq"):
+                            if key in state:
+                                state[key][:, dead_idx] = 0.0
+
+        # Renormalize after the in-place edit.
+        self._renormalize_decoder()
+        return n_dead
+
 
 def build_topk_sae(
     *,

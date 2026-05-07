@@ -65,6 +65,20 @@ def main(
     weight_decay: float = typer.Option(0.0, "--weight-decay"),
     seed: int = typer.Option(0, "--seed"),
     log_every: int = typer.Option(50, "--log-every"),
+    resample_every: int = typer.Option(
+        0, "--resample-every",
+        help="Resample dead features every N steps (Bricken et al. 2023). "
+             "0 disables. Recommended ~500-2000 for materials port.",
+    ),
+    resample_window: int = typer.Option(
+        0, "--resample-window",
+        help="Lookback window in steps for the dead-feature counter. "
+             "Defaults to resample_every if not set.",
+    ),
+    resample_threshold: int = typer.Option(
+        0, "--resample-threshold",
+        help="Features with <= this many fires in the window are dead.",
+    ),
     device: str = typer.Option("auto", "--device"),
 ) -> None:
     """Train Top-K SAE on cached CHGNet embeddings."""
@@ -119,10 +133,23 @@ def main(
     )
 
     typer.echo("==> Training")
+    typer.echo(f"    resample_every : {resample_every} (0 disables)")
+    if resample_every > 0:
+        if resample_window <= 0:
+            resample_window = resample_every
+        typer.echo(f"    resample_window: {resample_window}")
+        typer.echo(f"    resample_thresh: {resample_threshold}")
     typer.echo("-" * 64)
     history: list[dict] = []
+    resample_log: list[dict] = []
     step = 0
     t0 = time.time()
+
+    # Sliding-window per-feature fire counter.
+    fire_counter = torch.zeros(hidden_dim, device=device, dtype=torch.long)
+    # Stash the most recent batch so we can use it as the sampling pool
+    # at the next resample point.
+    last_batch_x: torch.Tensor | None = None
 
     for epoch in range(epochs):
         perm = np.random.permutation(n)
@@ -136,6 +163,34 @@ def main(
             optimizer.step()
             sae._renormalize_decoder()
             step += 1
+
+            if resample_every > 0:
+                fire_counter += (z > 0).sum(dim=0).long()
+                last_batch_x = x.detach()
+                if step % resample_every == 0:
+                    n_resampled = sae.resample_dead_features(
+                        activation_history=fire_counter,
+                        x_batch_normalized=last_batch_x,
+                        threshold=resample_threshold,
+                        optimizer=optimizer,
+                    )
+                    if n_resampled > 0:
+                        n_dead_before = int(
+                            (fire_counter <= resample_threshold).sum().item()
+                        )
+                        typer.echo(
+                            f"  [step {step}] resampled "
+                            f"{n_resampled} dead features "
+                            f"(<= {resample_threshold} fires in last "
+                            f"{resample_window} steps)"
+                        )
+                        resample_log.append({
+                            "step": step,
+                            "n_resampled": int(n_resampled),
+                            "n_dead_before": n_dead_before,
+                        })
+                    fire_counter.zero_()
+
             if step % log_every == 0 or step == 1:
                 active_frac = float((z > 0).float().mean().item())
                 history.append({
@@ -177,6 +232,10 @@ def main(
                 "run_id": run_id,
                 "completed_utc": datetime.now(UTC).isoformat(),
                 "history": history,
+                "resample_log": resample_log,
+                "resample_every": resample_every,
+                "resample_window": resample_window,
+                "resample_threshold": resample_threshold,
                 "final_loss": history[-1]["loss"] if history else None,
                 "wall_clock_seconds": time.time() - t0,
             },
