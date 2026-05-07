@@ -224,6 +224,11 @@ def main(
         help="Path to cot_sft_sae/<run>/records.jsonl. "
              "Default: latest.",
     ),
+    hybrid_jsonl: Path | None = typer.Option(
+        None, "--hybrid-jsonl",
+        help="Path to hybrid/<run>/records.jsonl. "
+             "Default: latest if present.",
+    ),
     out_root: Path = typer.Option(
         Path("runs/materials/holdout"), "--out-root",
     ),
@@ -233,17 +238,24 @@ def main(
         probe_head_jsonl = _latest_jsonl(out_root / "probe_head")
     if cot_sft_sae_jsonl is None:
         cot_sft_sae_jsonl = _latest_jsonl(out_root / "cot_sft_sae")
+    if hybrid_jsonl is None:
+        hybrid_jsonl = _latest_jsonl(out_root / "hybrid")
 
-    if probe_head_jsonl is None and cot_sft_sae_jsonl is None:
-        typer.echo("ERROR: no records.jsonl found under either "
-                   "runs/materials/holdout/probe_head/ or "
-                   "runs/materials/holdout/cot_sft_sae/.", err=True)
+    if (
+        probe_head_jsonl is None
+        and cot_sft_sae_jsonl is None
+        and hybrid_jsonl is None
+    ):
+        typer.echo("ERROR: no records.jsonl found under any of "
+                   "probe_head/, cot_sft_sae/, hybrid/.", err=True)
         sys.exit(1)
 
     if probe_head_jsonl is not None:
         typer.echo(f"probe_head      : {probe_head_jsonl}")
     if cot_sft_sae_jsonl is not None:
         typer.echo(f"cot_sft_sae     : {cot_sft_sae_jsonl}")
+    if hybrid_jsonl is not None:
+        typer.echo(f"hybrid          : {hybrid_jsonl}")
 
     recs_probe = (
         _read_jsonl(probe_head_jsonl) if probe_head_jsonl is not None else {}
@@ -251,19 +263,31 @@ def main(
     recs_llm = (
         _read_jsonl(cot_sft_sae_jsonl) if cot_sft_sae_jsonl is not None else {}
     )
+    recs_hybrid = (
+        _read_jsonl(hybrid_jsonl) if hybrid_jsonl is not None else {}
+    )
 
     sum_probe = _summarize(recs_probe) if recs_probe else None
     sum_llm = _summarize(recs_llm) if recs_llm else None
+    sum_hybrid = _summarize(recs_hybrid) if recs_hybrid else None
 
     if sum_probe is not None:
         _print_table("probe_head (CHGNet heads only)", sum_probe)
     if sum_llm is not None:
         _print_table("cot_sft_sae (probes + SAE -> Qwen+LoRA)", sum_llm)
+    if sum_hybrid is not None:
+        _print_table("hybrid (LLM regression + probe classification)", sum_hybrid)
     if sum_probe is not None and sum_llm is not None:
         _print_delta("probe_head", sum_probe, "cot_sft_sae", sum_llm)
         _print_disagreement(
             "probe_head", recs_probe,
             "cot_sft_sae", recs_llm,
+        )
+    if sum_probe is not None and sum_hybrid is not None:
+        _print_delta("probe_head", sum_probe, "hybrid", sum_hybrid)
+        _print_disagreement(
+            "probe_head", recs_probe,
+            "hybrid", recs_hybrid,
         )
 
 
