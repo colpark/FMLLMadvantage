@@ -108,8 +108,14 @@ class CHGNetWrap:
         else:
             device = "cpu"
         model.eval()
-        for p in model.parameters():
-            p.requires_grad = False
+        # NOTE: do NOT freeze parameters or wrap forward in torch.no_grad().
+        # CHGNet's predict_structure internally calls
+        # torch.autograd.grad(energy, positions) to compute forces. If
+        # we block the grad graph, energy lacks a grad_fn and autograd
+        # raises ``element 0 of tensors does not require grad and does
+        # not have a grad_fn``. eval() suffices to disable dropout /
+        # batchnorm-train-mode; parameters get no gradients applied
+        # because we never call optimizer.step().
         return cls(model, device=device)
 
     # ------------------------------------------------------------------
@@ -170,8 +176,11 @@ class CHGNetWrap:
             pooled: (fea_dim,) tensor on the device.
         """
         self._cached_atom_fea = None
-        with torch.no_grad():
-            _ = self._model.predict_structure(structure)
+        # Do not wrap in torch.no_grad(): CHGNet computes forces via
+        # autograd internally, which fails if the energy tensor has no
+        # grad_fn. The hook detaches the captured atom features before
+        # they leave this method, so no grad graph escapes upward.
+        _ = self._model.predict_structure(structure)
         if self._cached_atom_fea is None:
             raise RuntimeError(
                 "Hook did not fire; no atom features captured. Check "
@@ -204,10 +213,12 @@ class CHGNetWrap:
     def predict(self, structure: Any) -> dict[str, Any]:
         """Run CHGNet's full prediction (energy, forces, stress, magmoms).
 
-        Used later by the cross-FM verifier source.
+        Used later by the cross-FM verifier source. Does NOT wrap in
+        torch.no_grad() because CHGNet computes forces via
+        torch.autograd.grad(energy, positions). The returned dict's
+        tensors are detached by chgnet before being returned.
         """
-        with torch.no_grad():
-            return self._model.predict_structure(structure)
+        return self._model.predict_structure(structure)
 
     @property
     def device(self) -> str:
