@@ -32,7 +32,7 @@ def _example_probes() -> dict:
         "formation_energy": {"prediction": -2.85, "confidence": 0.91},
         "e_above_hull": {"prediction": 0.018, "confidence": 0.85},
         "band_gap": {"prediction": 1.23, "confidence": 0.88},
-        "magnetization": {"prediction": 0.0, "confidence": 0.93},
+        "is_metal": {"prediction": "non_metal", "confidence": 0.93},
         "space_group": {"prediction": 225, "confidence": 0.79},
     }
 
@@ -106,7 +106,7 @@ def test_generate_cot_mentions_each_probe():
     assert "formation-energy probe" in txt
     assert "e-above-hull probe" in txt
     assert "band-gap probe" in txt
-    assert "magnetization probe" in txt
+    assert "is-metal probe" in txt
     assert "space-group probe" in txt
     assert "Step 1 - Read the probes" in txt
     assert "Step 2" in txt

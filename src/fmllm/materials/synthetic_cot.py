@@ -73,18 +73,64 @@ def stability_consistent(
     )
 
 
-def band_gap_consistent(band_gap: float, predicted_class: str) -> tuple[bool, str]:
-    """Cross-check predicted band-gap class against the band_gap value."""
+def band_gap_consistent(
+    band_gap: float,
+    predicted_class: str,
+    is_metal_pred: str | None = None,
+) -> tuple[bool, str]:
+    """Cross-check predicted band-gap class against band_gap + is_metal probes.
+
+    The is_metal probe is the authoritative metal/non-metal signal
+    (a dedicated 2-class head). The band_gap regression probe
+    additionally disambiguates narrow vs wide for non-metals.
+    Their joint use is what the held-out evaluator scores against,
+    so both should appear in the cross-check.
+    """
     pclass = predicted_class.lower()
-    if band_gap <= 1.0e-3 and pclass == "metal":
-        return True, "Band gap ≈ 0 confirms metal classification."
-    if 1.0e-3 < band_gap <= 3.0 and pclass == "narrow":
-        return True, (
-            f"Band gap {band_gap:.2f} eV places this in the narrow-gap regime."
+    is_metal_flag = (
+        str(is_metal_pred).lower() == "metal" if is_metal_pred else None
+    )
+
+    if pclass == "metal":
+        if is_metal_flag is True:
+            return True, (
+                "is_metal probe says 'metal'; band_gap probe value "
+                f"{band_gap:.2f} eV is consistent (small or zero gap)."
+            )
+        if band_gap <= 1.0e-3:
+            return True, "Band gap ≈ 0 confirms metal classification."
+        return False, (
+            f"Predicted 'metal' but band_gap probe is {band_gap:.2f} eV "
+            f"and is_metal probe is {is_metal_pred!r}; defer to is_metal "
+            f"if confidence is high."
         )
-    if band_gap > 3.0 and pclass == "wide":
-        return True, (
-            f"Band gap {band_gap:.2f} eV places this in the wide-gap regime."
+    if pclass == "narrow":
+        if is_metal_flag is False and 1.0e-3 < band_gap <= 3.0:
+            return True, (
+                f"is_metal probe says 'non_metal' and band_gap "
+                f"{band_gap:.2f} eV places this in the narrow-gap regime."
+            )
+        if 1.0e-3 < band_gap <= 3.0:
+            return True, (
+                f"Band gap {band_gap:.2f} eV places this in the narrow-gap regime."
+            )
+        return False, (
+            f"Predicted 'narrow' but band_gap probe is {band_gap:.2f} eV; "
+            f"reconcile with is_metal probe ({is_metal_pred!r})."
+        )
+    if pclass == "wide":
+        if is_metal_flag is False and band_gap > 3.0:
+            return True, (
+                f"is_metal probe says 'non_metal' and band_gap "
+                f"{band_gap:.2f} eV places this in the wide-gap regime."
+            )
+        if band_gap > 3.0:
+            return True, (
+                f"Band gap {band_gap:.2f} eV places this in the wide-gap regime."
+            )
+        return False, (
+            f"Predicted 'wide' but band_gap probe is {band_gap:.2f} eV; "
+            f"reconcile with is_metal probe ({is_metal_pred!r})."
         )
     return False, (
         f"Band-gap probe value {band_gap:.2f} eV does not match the "
@@ -188,7 +234,7 @@ def generate_cot(
     Args:
         probe_outputs: Output of a materials probe-bank evaluate call
             for one specimen. Expected probe names: ``formation_energy``,
-            ``e_above_hull``, ``band_gap``, ``magnetization``,
+            ``e_above_hull``, ``band_gap``, ``is_metal``,
             ``space_group``. Missing probes are tolerated.
         ground_truth: Materials ground-truth dict (see
             :data:`GroundTruthMaterials`).
@@ -198,23 +244,35 @@ def generate_cot(
     e_form_pred = _read(probe_outputs, "formation_energy")
     e_hull_pred = _read(probe_outputs, "e_above_hull")
     bg_pred = _read(probe_outputs, "band_gap")
-    mag_pred = _read(probe_outputs, "magnetization")
+    is_metal_pred = _read(probe_outputs, "is_metal")
     sg_pred = _read(probe_outputs, "space_group")
 
     e_hull_value = float(e_hull_pred.get("prediction") or 0.0)
     bg_value = float(bg_pred.get("prediction") or 0.0)
-    is_stable_inferred = e_hull_value <= 0.025
-    bg_class_inferred = (
-        "metal" if bg_value <= 1.0e-3 else
-        ("narrow" if bg_value <= 3.0 else "wide")
+    is_metal_value = (
+        str(is_metal_pred.get("prediction") or "").lower() or None
     )
+    is_stable_inferred = e_hull_value <= 0.025
+    # Band-gap class derivation: is_metal probe is the authoritative
+    # metal/non-metal signal (dedicated 2-class head); band_gap probe
+    # disambiguates narrow vs wide for non-metals.
+    if is_metal_value == "metal":
+        bg_class_inferred = "metal"
+    elif bg_value <= 1.0e-3:
+        bg_class_inferred = "metal"
+    elif bg_value <= 3.0:
+        bg_class_inferred = "narrow"
+    else:
+        bg_class_inferred = "wide"
 
     stable_ok, stable_rationale = stability_consistent(
         e_above_hull=e_hull_value,
         is_stable_pred=is_stable_inferred,
     )
     bg_ok, bg_rationale = band_gap_consistent(
-        band_gap=bg_value, predicted_class=bg_class_inferred,
+        band_gap=bg_value,
+        predicted_class=bg_class_inferred,
+        is_metal_pred=is_metal_value,
     )
     consistent = stable_ok and bg_ok
 
@@ -238,11 +296,11 @@ def generate_cot(
             f"{bg_value:.2f} eV "
             f"(confidence {_confidence(bg_pred):.2f})"
         )
-    if mag_pred["prediction"] is not None:
+    if is_metal_pred["prediction"] is not None:
         lines.append(
-            f"  - magnetization probe    : "
-            f"{float(mag_pred['prediction']):.2f} μB "
-            f"(confidence {_confidence(mag_pred):.2f})"
+            f"  - is-metal probe         : "
+            f"{is_metal_value} "
+            f"(confidence {_confidence(is_metal_pred):.2f})"
         )
     if sg_pred["prediction"] is not None:
         lines.append(
@@ -271,8 +329,9 @@ def generate_cot(
     if consistent:
         lines.append(
             "  All probes agree on a coherent picture: stability is "
-            "decided by e_above_hull, band-gap class follows from the "
-            "band-gap value, and the space-group probe disambiguates "
+            "decided by e_above_hull, the is-metal probe disambiguates "
+            "metal vs non-metal, the band-gap probe places non-metals "
+            "in narrow vs wide, and the space-group probe disambiguates "
             "the lattice."
         )
     else:
@@ -280,6 +339,7 @@ def generate_cot(
             "formation-energy": _confidence(e_form_pred),
             "e-above-hull": _confidence(e_hull_pred),
             "band-gap": _confidence(bg_pred),
+            "is-metal": _confidence(is_metal_pred),
             "space-group": _confidence(sg_pred),
         }
         leader = max(candidates.items(), key=lambda kv: kv[1])
