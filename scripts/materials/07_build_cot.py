@@ -97,6 +97,13 @@ def _load_labels(labels_path: Path) -> dict[int, str]:
     return {int(k): str(v) for k, v in raw.items()}
 
 
+def _load_labels_rich(labels_rich_path: Path) -> dict[str, dict]:
+    """Load labels_rich.json: feature_idx_str -> rich metadata dict."""
+    with labels_rich_path.open("r") as f:
+        raw = json.load(f)
+    return {str(k): dict(v) for k, v in raw.items()}
+
+
 def _top_k_sae_features(
     z: torch.Tensor, labels: dict[int, str], top_k: int,
 ) -> list[list[tuple[str, float]]]:
@@ -152,6 +159,12 @@ def main(
         help="If False, skip SAE entirely (no Step 1b in CoT, no "
              "SAE_FEATURES in user message). For ablation runs.",
     ),
+    rich_cot: bool = typer.Option(
+        False, "--rich-cot/--simple-cot",
+        help="If True, generate the v2 5-step CoT with composition, "
+             "probe-consistency review, and counterfactual sanity. "
+             "Reads labels_rich.json for richer SAE feature grounding.",
+    ),
     n_specimens: int = typer.Option(
         10000, "--n-specimens",
         help="Number of training specimens to emit records for. The "
@@ -172,7 +185,10 @@ def main(
 
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src"))
     from fmllm.materials.ground_truth import truth_dict  # noqa: PLC0415
-    from fmllm.materials.synthetic_cot import build_sft_record  # noqa: PLC0415
+    from fmllm.materials.synthetic_cot import (  # noqa: PLC0415
+        build_rich_sft_record,
+        build_sft_record,
+    )
     from fmllm.training.probe_bank import ProbeBank  # noqa: PLC0415
 
     if embeddings_dir is None:
@@ -232,6 +248,7 @@ def main(
     typer.echo(f"    embeddings_dir : {embeddings_dir}")
     typer.echo(f"    probe_bank_dir : {probe_bank_dir}")
     typer.echo(f"    include_sae    : {include_sae}")
+    typer.echo(f"    rich_cot       : {rich_cot}")
     if include_sae:
         typer.echo(f"    sae_dir        : {sae_dir}")
         typer.echo(f"    sae_labels     : {sae_labels_path}")
@@ -251,11 +268,27 @@ def main(
             f"hidden_dim={sae.hidden_dim} k={sae.k}"
         )
         labels = _load_labels(sae_labels_path)
+        # v2: try to load rich labels alongside the simple labels.json.
+        rich_metadata: dict[str, dict] = {}
+        if rich_cot and sae_labels_path is not None:
+            rich_path = sae_labels_path.parent / "labels_rich.json"
+            if rich_path.exists():
+                rich_metadata = _load_labels_rich(rich_path)
+                typer.echo(
+                    f"    rich labels    : {len(rich_metadata)} features "
+                    f"loaded from {rich_path}"
+                )
+            else:
+                typer.echo(
+                    f"    rich labels    : MISSING ({rich_path}); "
+                    f"rich-CoT will fall back to simple labels"
+                )
     else:
         sae = None
         cls_mean = None
         cls_std = None
         labels = {}
+        rich_metadata = {}
 
     jsonl_path = out_dir / "records.jsonl"
     n_written = 0
@@ -281,12 +314,21 @@ def main(
                 strict=True,
             ):
                 truth = truth_dict(h5, int(sid))
-                record = build_sft_record(
-                    probe_outputs=probe_out,
-                    ground_truth=truth,
-                    specimen_id=int(sid),
-                    sae_features=sae_feat,
-                )
+                if rich_cot:
+                    record = build_rich_sft_record(
+                        probe_outputs=probe_out,
+                        ground_truth=truth,
+                        specimen_id=int(sid),
+                        sae_features=sae_feat,
+                        feature_metadata=rich_metadata or None,
+                    )
+                else:
+                    record = build_sft_record(
+                        probe_outputs=probe_out,
+                        ground_truth=truth,
+                        specimen_id=int(sid),
+                        sae_features=sae_feat,
+                    )
                 if record["cot_consistent"]:
                     n_consistent += 1
                 if record["sae_features_count"] > 0:
@@ -318,6 +360,7 @@ def main(
                 "embeddings_dir": str(embeddings_dir),
                 "probe_bank_dir": str(probe_bank_dir),
                 "include_sae": bool(include_sae),
+                "rich_cot": bool(rich_cot),
                 "sae_dir": str(sae_dir) if sae_dir else None,
                 "sae_labels_path": (
                     str(sae_labels_path) if sae_labels_path else None

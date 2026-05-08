@@ -396,11 +396,371 @@ def build_sft_record(
     }
 
 
+# ---------------------------------------------------------------------------
+# v2: rich CoT
+# ---------------------------------------------------------------------------
+
+
+def _format_rich_sae_features(
+    sae_features: list[tuple[str, float]] | None,
+    feature_metadata: dict | None,
+) -> str:
+    """Render Step 1b body for the rich CoT.
+
+    feature_metadata: optional mapping str(idx) -> {
+        "label_rich": "...",
+        "tags": [...],
+        "top_specimens": [{"formula": "...", ...}, ...],
+        "activation_quantiles": {"p50": ..., "p90": ..., "p99": ..., "max": ...},
+    }
+    """
+    if not sae_features:
+        return ""
+    lines: list[str] = []
+    md = feature_metadata or {}
+    for label, act in sae_features[:8]:
+        # Try to extract feature index from labels like "f24: ..." or
+        # "f24 (rare)" -- store under str key in feature_metadata.
+        feat_idx_str = ""
+        if isinstance(label, str) and label.startswith("f"):
+            tail = label[1:]
+            for i, c in enumerate(tail):
+                if not c.isdigit():
+                    break
+                feat_idx_str = tail[: i + 1]
+            else:
+                feat_idx_str = tail
+        meta = md.get(feat_idx_str, {}) if feat_idx_str else {}
+        quantiles = meta.get("activation_quantiles") or {}
+        top_specs = meta.get("top_specimens") or []
+        rich_desc = meta.get("label_rich")
+
+        # Calibrated-strength descriptor.
+        strength = ""
+        if quantiles:
+            p99 = quantiles.get("p99")
+            p90 = quantiles.get("p90")
+            p50 = quantiles.get("p50")
+            if p99 is not None and act >= p99:
+                strength = " [99th+ pct: very strong firing]"
+            elif p90 is not None and act >= p90:
+                strength = " [90th+ pct: strong firing]"
+            elif p50 is not None and act >= p50:
+                strength = " [median: typical firing]"
+            else:
+                strength = " [below-median firing]"
+
+        if rich_desc:
+            lines.append(
+                f"  - {rich_desc}; activation {float(act):.2f}{strength}"
+            )
+        elif top_specs:
+            examples = ", ".join(
+                str(s.get("formula") or s.get("material_id") or "?")
+                for s in top_specs[:5]
+            )
+            lines.append(
+                f"  - {label} (activation {float(act):.2f}{strength}); "
+                f"fires on: {examples}"
+            )
+        else:
+            lines.append(f"  - {label} (activation {float(act):.2f})")
+    return "\n".join(lines)
+
+
+def _compositional_sanity(ground_truth: GroundTruthMaterials) -> str:
+    """Step 2 body: surface formula / n_atoms / crystal system as priors."""
+    formula = ground_truth.get("formula") or "(unknown)"
+    n_atoms = int(ground_truth.get("n_atoms", 0) or 0)
+    crystal_system = ground_truth.get("crystal_system") or "(unknown)"
+    space_group = int(ground_truth.get("space_group", -1) or -1)
+    is_metal = bool(ground_truth.get("is_metal", False))
+    bg_class = ground_truth.get("band_gap_class") or "(unknown)"
+
+    chemistry_note = ""
+    formula_lc = formula.lower()
+    # A few cheap pattern hints for the templated prose. The LLM has its
+    # own priors; these just nudge the reasoning to be specific about
+    # composition rather than abstract.
+    if any(elem in formula for elem in ("O", "S", "Se", "Te")) and any(
+        m in formula for m in ("Ti", "Fe", "Co", "Ni", "Cu", "Zn", "Mn", "V")
+    ):
+        chemistry_note = (
+            "  Composition contains a transition-metal cation paired "
+            "with a chalcogenide anion; common motifs in this family "
+            "include perovskites, spinels, and rocksalt-type oxides "
+            "(many are wide- or narrow-gap semiconductors)."
+        )
+    elif formula in ("Si", "Ge", "C", "Sn"):
+        chemistry_note = (
+            "  Single-element formula in Group IV: the canonical "
+            "ground state is the diamond-cubic structure (sg 227, "
+            "Fd-3m) with a narrow indirect gap. Expect tetrahedral "
+            "covalent bonding."
+        )
+    elif "H" in formula and len(formula) <= 5:
+        chemistry_note = (
+            "  Formula includes hydrogen in a small unit cell; common "
+            "for hydrides and molecular crystals."
+        )
+
+    return (
+        f"  Formula: {formula}. Unit cell: {n_atoms} atoms in a "
+        f"{crystal_system} cell (space group {space_group}). The DFT "
+        f"flag is_metal = {is_metal}; the band-gap class given the "
+        f"cell is {bg_class}.\n"
+        f"{chemistry_note}"
+    ).strip("\n")
+
+
+def _probe_consistency_review(
+    probe_outputs: dict[str, dict[str, Any]],
+    ground_truth: GroundTruthMaterials,
+) -> str:
+    """Step 3: confidence-aware per-probe review."""
+    lines: list[str] = []
+    e_form = _read(probe_outputs, "formation_energy")
+    e_hull = _read(probe_outputs, "e_above_hull")
+    bg = _read(probe_outputs, "band_gap")
+    is_metal = _read(probe_outputs, "is_metal")
+    sg = _read(probe_outputs, "space_group")
+
+    e_form_pred = e_form.get("prediction")
+    e_form_true = ground_truth.get("formation_energy")
+    if e_form_pred is not None and e_form_true is not None:
+        delta = abs(float(e_form_pred) - float(e_form_true))
+        lines.append(
+            f"  - formation_energy probe : "
+            f"{float(e_form_pred):.3f} eV/atom "
+            f"(confidence {_confidence(e_form):.2f}); "
+            f"deviation from truth = {delta:.3f}."
+        )
+
+    e_hull_pred = e_hull.get("prediction")
+    e_hull_true = ground_truth.get("e_above_hull")
+    is_stable_truth = bool(ground_truth.get("is_stable"))
+    if e_hull_pred is not None and e_hull_true is not None:
+        threshold_dist = abs(float(e_hull_pred) - 0.025)
+        lines.append(
+            f"  - e_above_hull probe     : "
+            f"{float(e_hull_pred):.3f} eV/atom "
+            f"(confidence {_confidence(e_hull):.2f}); "
+            f"distance from 0.025 stability threshold = {threshold_dist:.3f}; "
+            f"truth is_stable = {is_stable_truth}."
+        )
+
+    bg_pred = bg.get("prediction")
+    is_metal_pred = is_metal.get("prediction")
+    if bg_pred is not None:
+        lines.append(
+            f"  - band_gap probe         : "
+            f"{float(bg_pred):.2f} eV "
+            f"(confidence {_confidence(bg):.2f})."
+        )
+    if is_metal_pred is not None:
+        lines.append(
+            f"  - is_metal probe         : "
+            f"{is_metal_pred} "
+            f"(confidence {_confidence(is_metal):.2f}); this is the "
+            f"authoritative metal/non-metal signal -- defer to it for "
+            f"band_gap_class when confidence is high."
+        )
+    if sg.get("prediction") is not None:
+        lines.append(
+            f"  - space_group probe      : #{sg['prediction']} "
+            f"(confidence {_confidence(sg):.2f})."
+        )
+    return "\n".join(lines)
+
+
+def _counterfactual_check(
+    probe_outputs: dict[str, dict[str, Any]],
+    ground_truth: GroundTruthMaterials,
+) -> str:
+    """Step 4: a brief counterfactual sanity check."""
+    bg = _read(probe_outputs, "band_gap")
+    is_metal = _read(probe_outputs, "is_metal")
+    bg_pred = bg.get("prediction")
+    is_metal_pred = str(is_metal.get("prediction") or "").lower()
+    bg_class_truth = ground_truth.get("band_gap_class") or ""
+
+    if bg_pred is None:
+        return "  (no counterfactual possible without band-gap probe)"
+
+    bg_val = float(bg_pred)
+    if is_metal_pred == "metal" and bg_val > 0.5:
+        return (
+            f"  Tension: is_metal probe says 'metal' but band_gap probe "
+            f"predicts {bg_val:.2f} eV (a non-zero gap). High is_metal "
+            f"confidence trumps small-gap predictions. Truth says "
+            f"'{bg_class_truth}'."
+        )
+    if is_metal_pred == "non_metal" and bg_val <= 0.05:
+        return (
+            f"  Tension: is_metal probe says 'non_metal' but band_gap "
+            f"probe predicts ~0 eV. Probe MAE is on the order of 0.5 "
+            f"eV; non-metal status is more reliable than the "
+            f"sub-0.05-eV band-gap value. Truth says '{bg_class_truth}'."
+        )
+    return (
+        f"  Probes are mutually consistent: is_metal = {is_metal_pred}, "
+        f"band_gap = {bg_val:.2f} eV. The is_metal classification "
+        f"determines whether the band_gap_class is 'metal'; non-metals "
+        f"split into 'narrow' (<= 3 eV) vs 'wide' (> 3 eV) by the "
+        f"band_gap probe value. Truth says '{bg_class_truth}'."
+    )
+
+
+def generate_rich_cot(
+    *,
+    probe_outputs: dict[str, dict[str, Any]],
+    ground_truth: GroundTruthMaterials,
+    sae_features: list[tuple[str, float]] | None = None,
+    feature_metadata: dict | None = None,
+) -> MaterialsCoT:
+    """Rich materials CoT (v2): probes + SAE + composition + counterfactual.
+
+    Layout:
+      Step 1     - read probes (5 lines)
+      Step 1b    - SAE features with calibrated activation strength and
+                   representative-specimen grounding
+      Step 2     - compositional sanity check (formula, lattice, priors)
+      Step 3     - probe consistency review with confidence
+      Step 4     - counterfactual / probe-tension resolution
+      Final commit - ground-truth JSON
+
+    The Final commit JSON still comes from ground_truth (training
+    signal). Steps 1-4 are scaffolding that gives the LLM a richer
+    chain to learn during SFT.
+    """
+    cot = generate_cot(
+        probe_outputs=probe_outputs,
+        ground_truth=ground_truth,
+        sae_features=sae_features,
+    )
+    consistent = cot.consistent
+    final_claim = cot.final_claim
+
+    lines: list[str] = []
+
+    # Step 1: probes (reuse compact rendering).
+    e_form_pred = _read(probe_outputs, "formation_energy")
+    e_hull_pred = _read(probe_outputs, "e_above_hull")
+    bg_pred = _read(probe_outputs, "band_gap")
+    is_metal_pred_dict = _read(probe_outputs, "is_metal")
+    sg_pred = _read(probe_outputs, "space_group")
+    bg_value = float(bg_pred.get("prediction") or 0.0)
+    is_metal_value = (
+        str(is_metal_pred_dict.get("prediction") or "").lower() or None
+    )
+
+    lines.append("Step 1 - Read the probes:")
+    if e_form_pred["prediction"] is not None:
+        lines.append(
+            f"  - formation-energy probe : "
+            f"{float(e_form_pred['prediction']):.2f} eV/atom "
+            f"(confidence {_confidence(e_form_pred):.2f})"
+        )
+    if e_hull_pred["prediction"] is not None:
+        lines.append(
+            f"  - e-above-hull probe     : "
+            f"{float(e_hull_pred['prediction']):.3f} eV/atom "
+            f"(confidence {_confidence(e_hull_pred):.2f})"
+        )
+    if bg_pred["prediction"] is not None:
+        lines.append(
+            f"  - band-gap probe         : "
+            f"{bg_value:.2f} eV "
+            f"(confidence {_confidence(bg_pred):.2f})"
+        )
+    if is_metal_pred_dict["prediction"] is not None:
+        lines.append(
+            f"  - is-metal probe         : "
+            f"{is_metal_value} "
+            f"(confidence {_confidence(is_metal_pred_dict):.2f})"
+        )
+    if sg_pred["prediction"] is not None:
+        lines.append(
+            f"  - space-group probe      : "
+            f"#{sg_pred['prediction']} "
+            f"(confidence {_confidence(sg_pred):.2f})"
+        )
+
+    # Step 1b: rich SAE features.
+    if sae_features:
+        lines.append("")
+        lines.append(
+            "Step 1b - SAE-derived structural / electronic context:"
+        )
+        lines.append(
+            _format_rich_sae_features(sae_features, feature_metadata)
+        )
+
+    # Step 2: compositional sanity check.
+    lines.append("")
+    lines.append("Step 2 - Compositional sanity check:")
+    lines.append(_compositional_sanity(ground_truth))
+
+    # Step 3: probe consistency review.
+    lines.append("")
+    lines.append("Step 3 - Probe consistency review:")
+    lines.append(_probe_consistency_review(probe_outputs, ground_truth))
+
+    # Step 4: counterfactual / tension check.
+    lines.append("")
+    lines.append("Step 4 - Counterfactual / tension check:")
+    lines.append(_counterfactual_check(probe_outputs, ground_truth))
+
+    # Final commit.
+    lines.append("")
+    lines.append(f"Final commit: {json.dumps(final_claim, sort_keys=True)}")
+
+    return MaterialsCoT(
+        text="\n".join(lines),
+        consistent=consistent,
+        final_claim=final_claim,
+    )
+
+
+def build_rich_sft_record(
+    *,
+    probe_outputs: dict[str, dict[str, Any]],
+    ground_truth: GroundTruthMaterials,
+    specimen_id: int,
+    sae_features: list[tuple[str, float]] | None = None,
+    feature_metadata: dict | None = None,
+) -> dict[str, Any]:
+    """Rich-CoT analogue of build_sft_record."""
+    cot = generate_rich_cot(
+        probe_outputs=probe_outputs,
+        ground_truth=ground_truth,
+        sae_features=sae_features,
+        feature_metadata=feature_metadata,
+    )
+    return {
+        "specimen_id": int(specimen_id),
+        "messages": [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": _user_message(probe_outputs, sae_features),
+            },
+            {"role": "assistant", "content": cot.text},
+        ],
+        "ground_truth": cot.final_claim,
+        "cot_consistent": cot.consistent,
+        "sae_features_count": (len(sae_features) if sae_features else 0),
+        "cot_version": "v2_rich",
+    }
+
+
 __all__ = [
     "GroundTruthMaterials",
     "MaterialsCoT",
     "band_gap_consistent",
+    "build_rich_sft_record",
     "build_sft_record",
     "generate_cot",
+    "generate_rich_cot",
     "stability_consistent",
 ]

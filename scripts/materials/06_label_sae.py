@@ -108,8 +108,25 @@ def main(
         Path("runs/materials/sae_labels"), "--out", "-o",
     ),
     top_n: int = typer.Option(50, "--top-n"),
-    min_purity: float = typer.Option(0.70, "--min-purity"),
-    min_corr: float = typer.Option(0.30, "--min-corr"),
+    min_purity: float = typer.Option(
+        0.90, "--min-purity",
+        help="v2 default: 0.90 (was 0.70). Sharper categorical locks.",
+    ),
+    min_corr: float = typer.Option(
+        0.55, "--min-corr",
+        help="v2 default: 0.55 (was 0.30). Only strong correlations "
+             "produce continuous tags.",
+    ),
+    corr_on_top_n: bool = typer.Option(
+        True, "--corr-on-top-n/--corr-on-all",
+        help="v2 default: compute correlations on top-N activators "
+             "instead of all specimens. Sharper signal.",
+    ),
+    top_specimens_keep: int = typer.Option(
+        5, "--top-specimens-keep",
+        help="How many representative training specimens to attach "
+             "per feature (v2 grounding for the CoT generator).",
+    ),
     device: str = typer.Option("auto", "--device"),
 ) -> None:
     """Label every SAE feature using materials attribute correlations."""
@@ -157,13 +174,15 @@ def main(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     typer.echo("==> Materials port Stage 6: label SAE features")
-    typer.echo(f"    sae_dir         : {sae_dir}")
-    typer.echo(f"    embeddings_dir  : {embeddings_dir}")
-    typer.echo(f"    n_specimens     : {len(specimen_ids)}")
-    typer.echo(f"    top_n           : {top_n}")
-    typer.echo(f"    min_purity      : {min_purity}")
-    typer.echo(f"    min_corr        : {min_corr}")
-    typer.echo(f"    out_dir         : {out_dir}")
+    typer.echo(f"    sae_dir              : {sae_dir}")
+    typer.echo(f"    embeddings_dir       : {embeddings_dir}")
+    typer.echo(f"    n_specimens          : {len(specimen_ids)}")
+    typer.echo(f"    top_n                : {top_n}")
+    typer.echo(f"    min_purity           : {min_purity}")
+    typer.echo(f"    min_corr             : {min_corr}")
+    typer.echo(f"    corr_on_top_n        : {corr_on_top_n}")
+    typer.echo(f"    top_specimens_keep   : {top_specimens_keep}")
+    typer.echo(f"    out_dir              : {out_dir}")
     typer.echo("")
 
     sae, cls_mean, cls_std = _load_sae(sae_path, device=device)
@@ -217,6 +236,21 @@ def main(
         n_atoms_arr = np.asarray(
             h5["nsites"][:][specimen_ids], dtype=np.float32,
         )
+        # v2: pull material_id and formula for top-specimen grounding.
+        material_ids: list[str] = []
+        formulas: list[str] = []
+        if "material_id" in h5:
+            mid_raw = h5["material_id"][:][specimen_ids]
+            material_ids = [
+                m.decode() if isinstance(m, bytes) else str(m)
+                for m in mid_raw
+            ]
+        if "formula_pretty" in h5:
+            fmt_raw = h5["formula_pretty"][:][specimen_ids]
+            formulas = [
+                f.decode() if isinstance(f, bytes) else str(f)
+                for f in fmt_raw
+            ]
     cs_strings = np.array(
         [_crystal_system_name(int(i), cs_names) for i in cs_ids], dtype=object,
     )
@@ -229,6 +263,7 @@ def main(
     # Label every feature.
     typer.echo("==> Labelling features...")
     labels_str: dict[int, str] = {}
+    labels_rich: dict[str, dict] = {}
     details: list[dict] = []
     n_locked = 0
     n_unlabelled = 0
@@ -248,8 +283,32 @@ def main(
             top_n=top_n,
             min_purity=min_purity,
             min_corr=min_corr,
+            material_ids=material_ids if material_ids else None,
+            formulas=formulas if formulas else None,
+            corr_on_top_n=corr_on_top_n,
+            top_specimens_keep=top_specimens_keep,
         )
         labels_str[i] = rec.label
+        # v2 rich record (separate file so v1 readers still work).
+        labels_rich[str(i)] = {
+            "label": rec.label,
+            "label_rich": rec.label_rich,
+            "tags": list(rec.tags),
+            "top_specimens": list(rec.top_specimens),
+            "activation_quantiles": rec.activation_quantiles,
+            "n_top_activators": rec.n_top_activators,
+            "purities": {
+                "crystal_system": rec.crystal_system_purity,
+                "is_metal": rec.is_metal_purity,
+                "band_gap_class": rec.band_gap_class_purity,
+            },
+            "correlations": {
+                "formation_energy": rec.formation_energy_corr,
+                "e_above_hull": rec.e_above_hull_corr,
+                "band_gap": rec.band_gap_corr,
+                "n_atoms": rec.n_atoms_corr,
+            },
+        }
         details.append(asdict(rec))
         if "(rare)" in rec.label:
             n_rare += 1
@@ -266,6 +325,10 @@ def main(
     with labels_path.open("w") as f:
         json.dump(labels_str, f, indent=2)
 
+    labels_rich_path = out_dir / "labels_rich.json"
+    with labels_rich_path.open("w") as f:
+        json.dump(labels_rich, f, indent=2)
+
     details_path = out_dir / "details.yaml"
     with details_path.open("w") as f:
         yaml.safe_dump({"features": details}, f, sort_keys=False)
@@ -281,17 +344,22 @@ def main(
                 "top_n": top_n,
                 "min_purity": min_purity,
                 "min_corr": min_corr,
+                "corr_on_top_n": corr_on_top_n,
+                "top_specimens_keep": top_specimens_keep,
                 "n_features": int(activations_arr.shape[1]),
                 "n_locked": n_locked,
                 "n_unlabelled": n_unlabelled,
                 "n_rare": n_rare,
+                "labels_path": str(labels_path),
+                "labels_rich_path": str(labels_rich_path),
                 "completed_utc": datetime.now(UTC).isoformat(),
             },
             f,
             sort_keys=False,
         )
 
-    typer.echo(f"==> Labels: {labels_path}")
+    typer.echo(f"==> Labels (v1): {labels_path}")
+    typer.echo(f"==> Labels (v2 rich): {labels_rich_path}")
 
 
 if __name__ == "__main__":

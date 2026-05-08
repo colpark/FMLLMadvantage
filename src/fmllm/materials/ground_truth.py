@@ -81,6 +81,23 @@ def truth_dict(h5: h5py.File, sid: int) -> dict[str, Any]:
     mag = float(np.asarray(mag_arr)) if mag_arr is not None else 0.0
     if np.isnan(mag):
         mag = 0.0
+
+    formula = ""
+    if "formula_pretty" in h5:
+        raw = h5["formula_pretty"][sid]
+        if isinstance(raw, bytes):
+            formula = raw.decode("utf-8", errors="replace")
+        else:
+            formula = str(raw)
+
+    material_id = ""
+    if "material_id" in h5:
+        raw = h5["material_id"][sid]
+        if isinstance(raw, bytes):
+            material_id = raw.decode("utf-8", errors="replace")
+        else:
+            material_id = str(raw)
+
     return {
         "formation_energy": e_form,
         "e_above_hull": e_hull,
@@ -92,6 +109,8 @@ def truth_dict(h5: h5py.File, sid: int) -> dict[str, Any]:
         "is_metal": is_metal,
         "total_magnetization": mag,
         "n_atoms": n_atoms,
+        "formula": formula,
+        "material_id": material_id,
     }
 
 

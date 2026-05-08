@@ -28,6 +28,7 @@ cd "${REPO_ROOT}"
 N_SPECIMENS="${N_SPECIMENS:-10000}"
 TOP_K_FEATURES="${TOP_K_FEATURES:-8}"
 INCLUDE_SAE="${INCLUDE_SAE:-1}"
+RICH_COT="${RICH_COT:-0}"
 GPU="${GPU:-0}"
 # Default output root depends on whether SAE features are included,
 # so the no-SAE ablation lands in a separate dir for downstream
@@ -47,6 +48,11 @@ if [ "${INCLUDE_SAE}" = "0" ] || [ "${INCLUDE_SAE}" = "false" ]; then
     EXTRA+=(--no-include-sae)
 else
     EXTRA+=(--include-sae)
+fi
+if [ "${RICH_COT}" = "1" ] || [ "${RICH_COT}" = "true" ]; then
+    EXTRA+=(--rich-cot)
+else
+    EXTRA+=(--simple-cot)
 fi
 if [ -n "${EMBEDDINGS_DIR:-}" ]; then
     EXTRA+=(--embeddings-dir "${EMBEDDINGS_DIR}")
@@ -69,6 +75,7 @@ echo "    SAE_LABELS_PATH : ${SAE_LABELS_PATH:-(latest)}"
 echo "    N_SPECIMENS     : ${N_SPECIMENS}"
 echo "    TOP_K_FEATURES  : ${TOP_K_FEATURES}"
 echo "    INCLUDE_SAE     : ${INCLUDE_SAE}"
+echo "    RICH_COT        : ${RICH_COT}"
 echo "    OUT_ROOT        : ${OUT_ROOT}"
 echo "    GPU             : ${GPU}"
 echo

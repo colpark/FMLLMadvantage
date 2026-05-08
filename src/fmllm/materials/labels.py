@@ -32,7 +32,20 @@ import numpy as np
 
 @dataclass
 class MaterialsFeatureLabel:
-    """One feature's structured label record (materials version)."""
+    """One feature's structured label record (materials version).
+
+    v2 fields (None / empty for v1-style labels):
+      * top_specimens: list of (sid, material_id, formula, activation)
+        for the top-N activating training specimens. Lets the CoT
+        ground each feature in concrete chemistry the LLM has priors
+        for ("fires on Si, Ge, C-diamond" rather than just
+        "crystal=cubic").
+      * activation_quantiles: per-feature distribution stats so the
+        CoT can report "feature 24 firing at 92nd percentile" rather
+        than uncalibrated raw activation values.
+      * label_rich: a longer natural-language description that
+        leverages the LLM's chemistry priors via concrete examples.
+    """
 
     feature_idx: int
     label: str
@@ -49,6 +62,10 @@ class MaterialsFeatureLabel:
     n_top_activators: int = 0
     activation_mean_top: float = 0.0
     tags: list[str] = field(default_factory=list)
+    # v2 extensions (populated when material_ids/formulas are passed).
+    top_specimens: list[dict] = field(default_factory=list)
+    activation_quantiles: dict | None = None
+    label_rich: str | None = None
 
 
 def _categorical_lock(values: list, min_purity: float) -> tuple[object | None, float]:
@@ -70,6 +87,17 @@ def _continuous_corr(activations: np.ndarray, attribute: np.ndarray) -> float:
     return float(np.corrcoef(activations, attribute)[0, 1])
 
 
+def _format_specimen_list(top_specimens: list[dict], n_show: int = 5) -> str:
+    """Render a few representative specimens as 'Si, Ge, C-diamond, ...'."""
+    if not top_specimens:
+        return ""
+    parts: list[str] = []
+    for sp in top_specimens[:n_show]:
+        formula = sp.get("formula") or sp.get("material_id") or "?"
+        parts.append(str(formula))
+    return ", ".join(parts)
+
+
 def label_materials_feature(
     *,
     feature_idx: int,
@@ -84,8 +112,27 @@ def label_materials_feature(
     top_n: int = 50,
     min_purity: float = 0.70,
     min_corr: float = 0.30,
+    # v2 enrichment knobs (no-op if material_ids / formulas not provided).
+    material_ids: list | np.ndarray | None = None,
+    formulas: list | np.ndarray | None = None,
+    corr_on_top_n: bool = False,
+    top_specimens_keep: int = 5,
 ) -> MaterialsFeatureLabel:
-    """Build a label for one SAE feature using materials attributes."""
+    """Build a label for one SAE feature using materials attributes.
+
+    v2 mode (when ``material_ids`` and ``formulas`` are passed and
+    ``corr_on_top_n=True``):
+      * Pearson correlations are computed on the top-N activating
+        specimens, not the full population. Sharper signal because
+        zero-activation rows no longer dominate.
+      * Top-K representative specimens (sid, material_id, formula,
+        activation) are stored on the returned label so the CoT can
+        ground the feature with concrete chemistry.
+      * Activation quantiles (p50, p90, p99, max) are stored so the
+        CoT can report calibrated firing strength.
+      * A natural-language ``label_rich`` is generated combining the
+        tag set with the representative-specimen examples.
+    """
     n_specimens = int(feature_activations.shape[0])
     if n_specimens == 0:
         return MaterialsFeatureLabel(
@@ -113,18 +160,34 @@ def label_materials_feature(
     ism_top, ism_purity = _categorical_lock(top_ism, min_purity)
     bgc_top, bgc_purity = _categorical_lock(top_bgc, min_purity)
 
-    e_form_corr = _continuous_corr(
-        feature_activations, formation_energies.astype(np.float64),
-    )
-    e_hull_corr = _continuous_corr(
-        feature_activations, e_above_hulls.astype(np.float64),
-    )
-    bg_corr = _continuous_corr(
-        feature_activations, band_gaps.astype(np.float64),
-    )
-    n_corr = _continuous_corr(
-        feature_activations, n_atoms.astype(np.float64),
-    )
+    if corr_on_top_n:
+        # v2: compute correlations only on top-N. Sharper signal.
+        e_form_corr = _continuous_corr(
+            top_acts, formation_energies[top_idx].astype(np.float64),
+        )
+        e_hull_corr = _continuous_corr(
+            top_acts, e_above_hulls[top_idx].astype(np.float64),
+        )
+        bg_corr = _continuous_corr(
+            top_acts, band_gaps[top_idx].astype(np.float64),
+        )
+        n_corr = _continuous_corr(
+            top_acts, n_atoms[top_idx].astype(np.float64),
+        )
+    else:
+        # v1: correlations on full population (zero-pattern dominates).
+        e_form_corr = _continuous_corr(
+            feature_activations, formation_energies.astype(np.float64),
+        )
+        e_hull_corr = _continuous_corr(
+            feature_activations, e_above_hulls.astype(np.float64),
+        )
+        bg_corr = _continuous_corr(
+            feature_activations, band_gaps.astype(np.float64),
+        )
+        n_corr = _continuous_corr(
+            feature_activations, n_atoms.astype(np.float64),
+        )
 
     tags: list[str] = []
     if cs_top is not None:
@@ -152,6 +215,41 @@ def label_materials_feature(
         else f"f{feature_idx}: unlabelled (no significant pattern)"
     )
 
+    # v2: enrich with top-specimen identities and activation quantiles.
+    top_specimens: list[dict] = []
+    if material_ids is not None and formulas is not None:
+        mids = list(material_ids)
+        fmls = list(formulas)
+        for rank, idx in enumerate(top_idx[:top_specimens_keep].tolist()):
+            top_specimens.append({
+                "sid": int(idx),
+                "material_id": str(mids[idx]) if idx < len(mids) else "?",
+                "formula": str(fmls[idx]) if idx < len(fmls) else "?",
+                "activation": float(feature_activations[idx]),
+                "rank": int(rank),
+            })
+
+    activation_quantiles: dict | None = None
+    if n_nonzero > 0:
+        nz_acts = feature_activations[nonzero]
+        activation_quantiles = {
+            "p50": float(np.percentile(nz_acts, 50)),
+            "p90": float(np.percentile(nz_acts, 90)),
+            "p99": float(np.percentile(nz_acts, 99)),
+            "max": float(nz_acts.max()),
+            "n_nonzero": int(n_nonzero),
+        }
+
+    # Build a richer natural-language description if v2 fields populated.
+    label_rich: str | None = None
+    if top_specimens:
+        examples = _format_specimen_list(top_specimens, n_show=5)
+        tag_summary = " + ".join(tags) if tags else "no significant tags"
+        label_rich = (
+            f"feature {feature_idx} fires on {examples} "
+            f"(top-{len(top_specimens)} activators); pattern: {tag_summary}"
+        )
+
     return MaterialsFeatureLabel(
         feature_idx=feature_idx,
         label=label,
@@ -168,6 +266,9 @@ def label_materials_feature(
         n_top_activators=int(take),
         activation_mean_top=float(top_acts.mean()),
         tags=tags,
+        top_specimens=top_specimens,
+        activation_quantiles=activation_quantiles,
+        label_rich=label_rich,
     )
 
 

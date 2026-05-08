@@ -33,7 +33,10 @@ cd "${REPO_ROOT}"
 
 CHGNET_MODEL_NAME="${CHGNET_MODEL_NAME:-0.3.0}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
-MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-768}"
+# v2 default: 1536 (was 768). Rich-CoT generations average ~1200-1400
+# tokens of assistant content; the 768 cap caused 17% truncation-driven
+# parse failures.
+MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-1536}"
 QUANTIZE="${QUANTIZE:-4bit}"
 BATCH_SIZE="${BATCH_SIZE:-16}"
 TOP_K_FEATURES="${TOP_K_FEATURES:-8}"

@@ -42,7 +42,9 @@ LORA_R="${LORA_R:-16}"
 LORA_ALPHA="${LORA_ALPHA:-32}"
 PER_DEVICE_BS="${PER_DEVICE_BS:-1}"
 GRAD_ACCUM="${GRAD_ACCUM:-16}"
-MAX_SEQ="${MAX_SEQ:-2048}"
+# v2 default: 2560 tokens to fit rich-CoT records (Step 1/1b/2/3/4/Final
+# w/ representative-specimen grounding). v1 records also fit.
+MAX_SEQ="${MAX_SEQ:-2560}"
 NUM_GPUS="${NUM_GPUS:-1}"
 OUT_ROOT="${OUT_ROOT:-checkpoints/materials/cot-sft-sae}"
 
