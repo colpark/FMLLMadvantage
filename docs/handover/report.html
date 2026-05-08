@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FMLLMadvantage — Synthetic Data Test Report</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --fg: #1a1a1a;
+    --muted: #666;
+    --accent: #2b6cb0;
+    --accent2: #d53f8c;
+    --positive: #2f855a;
+    --negative: #c53030;
+    --neutral: #4a5568;
+    --gridline: #e2e8f0;
+    --card: #ffffff;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08);
+    --code-bg: #f3f0e8;
+    --pass: #38a169;
+    --caveat: #d69e2e;
+    --fail: #c53030;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+                 Arial, sans-serif;
+    line-height: 1.55;
+    color: var(--fg);
+    background: var(--bg);
+    margin: 0;
+    padding: 0;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+  h1 { font-size: 2.1rem; margin: 0 0 0.3rem; letter-spacing: -0.02em; }
+  h2 {
+    font-size: 1.55rem;
+    margin-top: 3rem;
+    margin-bottom: 0.8rem;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 0.3rem;
+    color: #1a365d;
+  }
+  h3 {
+    font-size: 1.2rem;
+    margin-top: 2rem;
+    margin-bottom: 0.6rem;
+    color: #2a4a7a;
+  }
+  h4 { font-size: 1.05rem; margin-top: 1.2rem; margin-bottom: 0.4rem; }
+  p { margin: 0.5em 0 1em; }
+  .subtitle { color: var(--muted); font-size: 1.05rem; margin-bottom: 1.5rem; }
+  .lede {
+    background: linear-gradient(135deg, #e6f0ff 0%, #fce7f3 100%);
+    border-left: 4px solid var(--accent);
+    padding: 1.2rem 1.4rem;
+    margin: 1.5rem 0 2rem;
+    border-radius: 6px;
+  }
+  .lede strong { color: #1a365d; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0 1.5rem;
+    font-size: 0.92rem;
+    background: var(--card);
+    box-shadow: var(--shadow);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--gridline);
+  }
+  th { background: #f0eee6; font-weight: 600; color: #2a4a7a; }
+  tr:last-child td { border-bottom: none; }
+  tr.highlight { background: #f0fff4; }
+  tr.negative-row { background: #fff5f5; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; }
+  code {
+    font-family: "JetBrains Mono", "SF Mono", Consolas, Monaco, monospace;
+    font-size: 0.88em;
+    background: var(--code-bg);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 0.9rem 1rem;
+    border-radius: 5px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.45;
+  }
+  pre code { background: transparent; padding: 0; }
+  .figure {
+    background: var(--card);
+    border-radius: 8px;
+    padding: 1.4rem 1rem 1rem;
+    margin: 1.5rem 0;
+    box-shadow: var(--shadow);
+    text-align: center;
+  }
+  .figure svg { max-width: 100%; height: auto; }
+  .figure-caption {
+    font-size: 0.86rem;
+    color: var(--muted);
+    margin-top: 0.6rem;
+    text-align: left;
+    padding: 0 0.5rem;
+  }
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: #f0f9ff;
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .callout.positive { border-color: var(--positive); background: #f0fff4; }
+  .callout.negative { border-color: var(--negative); background: #fff5f5; }
+  .callout.warning { border-color: #d69e2e; background: #fffbeb; }
+  .pill {
+    display: inline-block;
+    padding: 0.1em 0.55em;
+    border-radius: 999px;
+    font-size: 0.78em;
+    font-weight: 600;
+    margin: 0 0.2em;
+  }
+  .pill.positive { background: #c6f6d5; color: #22543d; }
+  .pill.negative { background: #fed7d7; color: #742a2a; }
+  .pill.neutral { background: #e2e8f0; color: #2d3748; }
+  .pill.win { background: #bee3f8; color: #1a4365; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  @media (max-width: 760px) { .grid-2 { grid-template-columns: 1fr; } }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--gridline);
+    border-radius: 6px;
+    padding: 0.8rem 1rem;
+    font-size: 0.92rem;
+    margin: 1.5rem 0 2rem;
+  }
+  .toc ol { margin: 0.4rem 0; padding-left: 1.4rem; }
+  .toc a { text-decoration: none; color: var(--accent); }
+  .toc a:hover { text-decoration: underline; }
+  .footer {
+    margin-top: 4rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--gridline);
+    color: var(--muted);
+    font-size: 0.86rem;
+  }
+  .small { font-size: 0.86rem; color: var(--muted); }
+  .num-big { font-size: 1.4rem; font-weight: 700; color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>FMLLMadvantage</h1>
+<p class="subtitle">A research investigation into how an LLM should orchestrate reasoning across multiple specialist foundation models — synthetic Lennard-Jones cluster testbed</p>
+
+<div class="lede">
+<strong>Headline:</strong> Two architectural pathways achieve near-ceiling goal accuracy on the held-out range:
+(1) typed-output contract + multi-source verifier &mdash; <code>full = 0.695</code> &mdash; the orchestration recipe;
+(2) supervised CoT-SFT over rich representation evidence with no verifier &mdash; <code>cot_sft_sae = 0.650</code> &mdash; the single-shot recipe, within 4.5 pp of the verifier ceiling.
+The unifying principle: <strong>representation features help when used as training-time supervision but hurt as inference-time prompt injection.</strong>
+</div>
+
+<div class="toc">
+<strong>Contents</strong>
+<ol>
+  <li><a href="#testbed">The testbed</a></li>
+  <li><a href="#architecture">Architecture &amp; data flow</a></li>
+  <li><a href="#timeline">Phase timeline</a></li>
+  <li><a href="#headline">Headline results</a></li>
+  <li><a href="#phases">Phase-by-phase results</a></li>
+  <li><a href="#findings">Architectural findings</a></li>
+  <li><a href="#verdict">Verdict-stratified breakdown</a></li>
+  <li><a href="#phase16">Phase 16 deep dive</a></li>
+  <li><a href="#failure">Failure-mode shifts</a></li>
+  <li><a href="#limits">Limitations &amp; caveats</a></li>
+  <li><a href="#open">Open questions &amp; bets</a></li>
+</ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="testbed">1. The testbed</h2>
+
+<p>
+A synthetic 2D Lennard-Jones cluster identification task. Each specimen is a configuration of <code>n_atoms</code>
+particles in some motif (<code>ring</code>, <code>linear</code>, <code>triangular_disk</code>) at temperature
+<code>T &isin; [0.05, 1.00]</code> LJ units. Three independent FMs see three independent views of the same specimen.
+The LLM's job is to identify the specimen as <code>(motif, n_atoms, T)</code>.
+</p>
+
+<div class="figure">
+<svg viewBox="0 0 800 320" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, sans-serif" font-size="13">
+  <!-- specimen box -->
+  <rect x="20" y="130" width="120" height="60" rx="6" fill="#fef3c7" stroke="#92400e" stroke-width="1.5"/>
+  <text x="80" y="155" text-anchor="middle" font-weight="600">Specimen</text>
+  <text x="80" y="175" text-anchor="middle" font-size="11" fill="#666">(motif, n_atoms, T)</text>
+
+  <!-- arrows from specimen -->
+  <line x1="140" y1="160" x2="190" y2="80" stroke="#666" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <line x1="140" y1="160" x2="190" y2="160" stroke="#666" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <line x1="140" y1="160" x2="190" y2="240" stroke="#666" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <!-- FMs -->
+  <rect x="200" y="50" width="170" height="60" rx="5" fill="#dbeafe" stroke="#1e40af"/>
+  <text x="285" y="73" text-anchor="middle" font-weight="600">FM1 — image</text>
+  <text x="285" y="92" text-anchor="middle" font-size="11" fill="#475569">small image transformer</text>
+  <text x="285" y="105" text-anchor="middle" font-size="10" fill="#666">rasterized cluster → CLS</text>
+
+  <rect x="200" y="130" width="170" height="60" rx="5" fill="#fce7f3" stroke="#9d174d"/>
+  <text x="285" y="153" text-anchor="middle" font-weight="600">FM2 — RDF</text>
+  <text x="285" y="172" text-anchor="middle" font-size="11" fill="#475569">1D transformer, depth=6</text>
+  <text x="285" y="185" text-anchor="middle" font-size="10" fill="#666">g(r)[200] → CLS[320]</text>
+
+  <rect x="200" y="210" width="170" height="60" rx="5" fill="#dcfce7" stroke="#14532d"/>
+  <text x="285" y="233" text-anchor="middle" font-weight="600">FM3 — trajectory</text>
+  <text x="285" y="252" text-anchor="middle" font-size="11" fill="#475569">1D transformer over time</text>
+  <text x="285" y="265" text-anchor="middle" font-size="10" fill="#666">positions(t) → CLS</text>
+
+  <!-- bridges -->
+  <line x1="370" y1="80" x2="450" y2="160" stroke="#1e40af" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="370" y1="160" x2="450" y2="160" stroke="#9d174d" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="370" y1="240" x2="450" y2="160" stroke="#14532d" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- BridgedFMOutput -->
+  <rect x="455" y="130" width="135" height="60" rx="6" fill="#ede9fe" stroke="#5b21b6" stroke-width="1.5"/>
+  <text x="522" y="153" text-anchor="middle" font-weight="600" font-size="12">BridgedFMOutput</text>
+  <text x="522" y="170" text-anchor="middle" font-size="10" fill="#475569">typed JSON contracts</text>
+  <text x="522" y="183" text-anchor="middle" font-size="10" fill="#475569">{prediction, conf, deps}</text>
+
+  <!-- arrow to LLM -->
+  <line x1="590" y1="160" x2="640" y2="160" stroke="#5b21b6" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- LLM box -->
+  <rect x="645" y="115" width="135" height="90" rx="6" fill="#fff" stroke="#0c4a6e" stroke-width="2"/>
+  <text x="712" y="140" text-anchor="middle" font-weight="700" fill="#0c4a6e">LLM</text>
+  <text x="712" y="158" text-anchor="middle" font-size="11">Qwen 2.5 7B</text>
+  <text x="712" y="173" text-anchor="middle" font-size="10" fill="#475569">frozen, 4-bit nf4</text>
+  <text x="712" y="190" text-anchor="middle" font-size="10" fill="#475569">orchestrator</text>
+
+  <!-- arrow defs -->
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#444"/>
+    </marker>
+  </defs>
+</svg>
+<div class="figure-caption"><strong>Figure 1.</strong> Three FMs see independent views of the same specimen and emit typed <code>BridgedFMOutput</code> contracts. The LLM consumes these as tool messages.</div>
+</div>
+
+<table>
+  <tr><th>Output</th><th>Value</th></tr>
+  <tr><td><code>motif</code></td><td><code>{ring, linear, triangular_disk}</code></td></tr>
+  <tr><td><code>n_atoms</code></td><td><code>[2, 30]</code></td></tr>
+  <tr><td><code>temperature</code></td><td><code>[0.05, 1.00]</code> LJ units</td></tr>
+  <tr><td>Goal-accuracy criterion</td><td>motif exact &amp; n_atoms exact &amp; |&Delta;T| &le; 0.10</td></tr>
+  <tr><td>Held-out range</td><td>specimens <code>[40000, 40200)</code> (200 specimens)</td></tr>
+</table>
+
+<p>
+The verifier returns <span class="pill" style="background:#c6f6d5;color:#22543d">PASS</span>,
+<span class="pill" style="background:#fef3c7;color:#92400e">CAVEAT</span>, or
+<span class="pill" style="background:#fed7d7;color:#742a2a">FAIL</span> from five independent oracles
+(rule library, literature DB, cross-FM agreement, MC simulator, conformal coverage). Aggregation is worst-case.
+</p>
+
+<!-- ============================================================ -->
+<h2 id="architecture">2. Architecture &amp; data flow (Pipeline A, the <code>full</code> baseline)</h2>
+
+<div class="figure">
+<svg viewBox="0 0 800 380" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, sans-serif" font-size="12">
+  <!-- vertical flow -->
+  <rect x="320" y="20" width="160" height="40" rx="4" fill="#fef3c7" stroke="#92400e"/>
+  <text x="400" y="45" text-anchor="middle" font-weight="600">Specimen (HDF5)</text>
+
+  <line x1="400" y1="60" x2="400" y2="80" stroke="#444" stroke-width="1.5" marker-end="url(#arrow2)"/>
+
+  <!-- FMs row -->
+  <rect x="160" y="80" width="480" height="65" rx="6" fill="#f0f9ff" stroke="#0c4a6e" stroke-width="1.5"/>
+  <text x="400" y="100" text-anchor="middle" font-weight="600">FMs (orchestrator picks calls)</text>
+  <rect x="180" y="108" width="140" height="32" rx="4" fill="#dbeafe" stroke="#1e40af"/>
+  <text x="250" y="128" text-anchor="middle" font-size="11">FM1 (image)</text>
+  <rect x="330" y="108" width="140" height="32" rx="4" fill="#fce7f3" stroke="#9d174d"/>
+  <text x="400" y="128" text-anchor="middle" font-size="11">FM2 (RDF)</text>
+  <rect x="480" y="108" width="140" height="32" rx="4" fill="#dcfce7" stroke="#14532d"/>
+  <text x="550" y="128" text-anchor="middle" font-size="11">FM3 (trajectory)</text>
+
+  <line x1="400" y1="145" x2="400" y2="170" stroke="#444" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <text x="475" y="162" font-size="10" fill="#444" font-style="italic">BridgedFMOutput JSON</text>
+
+  <!-- OHVD loop -->
+  <rect x="160" y="170" width="480" height="120" rx="6" fill="#fff" stroke="#5b21b6" stroke-width="2"/>
+  <text x="400" y="192" text-anchor="middle" font-weight="700" fill="#5b21b6">OHVD loop (orchestrator/loop.py)</text>
+  <text x="400" y="208" text-anchor="middle" font-size="11" fill="#666">Observe → Hypothesize → Verify → Decide, max 16 turns</text>
+
+  <rect x="190" y="220" width="200" height="55" rx="5" fill="#ede9fe" stroke="#5b21b6"/>
+  <text x="290" y="240" text-anchor="middle" font-size="11" font-weight="600">LLM (Qwen 2.5 7B)</text>
+  <text x="290" y="256" text-anchor="middle" font-size="10" fill="#475569">chat() with tool messages</text>
+
+  <rect x="410" y="220" width="200" height="55" rx="5" fill="#fef3c7" stroke="#92400e"/>
+  <text x="510" y="240" text-anchor="middle" font-size="11" font-weight="600">Multi-source verifier</text>
+  <text x="510" y="256" text-anchor="middle" font-size="10" fill="#475569">PASS / CAVEAT / FAIL</text>
+
+  <line x1="390" y1="247" x2="410" y2="247" stroke="#444" stroke-width="1" marker-end="url(#arrow2)"/>
+  <line x1="510" y1="275" x2="510" y2="290" stroke="#444" stroke-width="1"/>
+  <line x1="510" y1="290" x2="290" y2="290" stroke="#444" stroke-width="1"/>
+  <line x1="290" y1="290" x2="290" y2="275" stroke="#444" stroke-width="1" marker-end="url(#arrow2)"/>
+  <text x="400" y="302" text-anchor="middle" font-size="9" fill="#666" font-style="italic">CAVEAT/FAIL → LLM revises</text>
+
+  <line x1="400" y1="290" x2="400" y2="320" stroke="#444" stroke-width="1.5" marker-end="url(#arrow2)"/>
+
+  <rect x="280" y="320" width="240" height="40" rx="4" fill="#dcfce7" stroke="#14532d"/>
+  <text x="400" y="345" text-anchor="middle" font-weight="600">Trajectory (JSONL) → goal_accuracy</text>
+
+  <defs>
+    <marker id="arrow2" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#444"/>
+    </marker>
+  </defs>
+</svg>
+<div class="figure-caption"><strong>Figure 2.</strong> Pipeline A's data flow. The OHVD loop alternates LLM commits with verifier checks for up to 16 turns. CAVEAT/FAIL verdicts trigger LLM revision; PASS or budget exhaustion terminates.</div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="timeline">3. Phase timeline</h2>
+
+<div class="figure">
+<svg viewBox="0 0 800 250" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, sans-serif" font-size="11">
+  <!-- timeline axis -->
+  <line x1="50" y1="200" x2="770" y2="200" stroke="#444" stroke-width="2"/>
+
+  <!-- phase ticks -->
+  <g font-size="10" text-anchor="middle">
+    <line x1="80" y1="195" x2="80" y2="205" stroke="#444"/>
+    <text x="80" y="220">8a</text>
+
+    <line x1="155" y1="195" x2="155" y2="205" stroke="#444"/>
+    <text x="155" y="220">9</text>
+
+    <line x1="230" y1="195" x2="230" y2="205" stroke="#444"/>
+    <text x="230" y="220">10</text>
+
+    <line x1="305" y1="195" x2="305" y2="205" stroke="#444"/>
+    <text x="305" y="220">11</text>
+
+    <line x1="380" y1="195" x2="380" y2="205" stroke="#444"/>
+    <text x="380" y="220">12</text>
+
+    <line x1="455" y1="195" x2="455" y2="205" stroke="#444"/>
+    <text x="455" y="220">13</text>
+
+    <line x1="530" y1="195" x2="530" y2="205" stroke="#444"/>
+    <text x="530" y="220">14</text>
+
+    <line x1="605" y1="195" x2="605" y2="205" stroke="#444"/>
+    <text x="605" y="220">15</text>
+
+    <line x1="700" y1="195" x2="700" y2="205" stroke="#444"/>
+    <text x="700" y="220">16</text>
+  </g>
+
+  <text x="400" y="245" text-anchor="middle" font-size="11" fill="#666">Phase number (chronological)</text>
+
+  <!-- phase labels above -->
+  <g font-size="10">
+    <rect x="40" y="140" width="80" height="40" rx="4" fill="#bbf7d0" stroke="#166534"/>
+    <text x="80" y="158" text-anchor="middle" font-weight="600">Phase 8a</text>
+    <text x="80" y="172" text-anchor="middle">full=0.695</text>
+    <line x1="80" y1="180" x2="80" y2="195" stroke="#166534" stroke-width="1.5"/>
+
+    <rect x="120" y="80" width="70" height="40" rx="4" fill="#fed7d7" stroke="#742a2a"/>
+    <text x="155" y="98" text-anchor="middle" font-weight="600">9: connector</text>
+    <text x="155" y="112" text-anchor="middle">below</text>
+    <line x1="155" y1="120" x2="155" y2="195" stroke="#742a2a" stroke-width="1"/>
+
+    <rect x="195" y="40" width="70" height="40" rx="4" fill="#fed7d7" stroke="#742a2a"/>
+    <text x="230" y="58" text-anchor="middle" font-weight="600">10: SSL</text>
+    <text x="230" y="72" text-anchor="middle">below</text>
+    <line x1="230" y1="80" x2="230" y2="195" stroke="#742a2a" stroke-width="1"/>
+
+    <rect x="270" y="100" width="70" height="40" rx="4" fill="#fef3c7" stroke="#92400e"/>
+    <text x="305" y="118" text-anchor="middle" font-weight="600">11: CoT-SFT</text>
+    <text x="305" y="132" text-anchor="middle">0.467</text>
+    <line x1="305" y1="140" x2="305" y2="195" stroke="#92400e" stroke-width="1"/>
+
+    <rect x="345" y="60" width="70" height="40" rx="4" fill="#fed7d7" stroke="#742a2a"/>
+    <text x="380" y="78" text-anchor="middle" font-weight="600">12: probes</text>
+    <text x="380" y="92" text-anchor="middle">0.562*</text>
+    <line x1="380" y1="100" x2="380" y2="195" stroke="#742a2a" stroke-width="1"/>
+
+    <rect x="420" y="20" width="70" height="40" rx="4" fill="#fed7d7" stroke="#742a2a"/>
+    <text x="455" y="38" text-anchor="middle" font-weight="600">13: SAE</text>
+    <text x="455" y="52" text-anchor="middle">0.585</text>
+    <line x1="455" y1="60" x2="455" y2="195" stroke="#742a2a" stroke-width="1"/>
+
+    <rect x="495" y="80" width="70" height="40" rx="4" fill="#fed7d7" stroke="#742a2a"/>
+    <text x="530" y="98" text-anchor="middle" font-weight="600">14: causal</text>
+    <text x="530" y="112" text-anchor="middle">0.570</text>
+    <line x1="530" y1="120" x2="530" y2="195" stroke="#742a2a" stroke-width="1"/>
+
+    <rect x="570" y="40" width="70" height="40" rx="4" fill="#fed7d7" stroke="#742a2a"/>
+    <text x="605" y="58" text-anchor="middle" font-weight="600">15: Qwen-SAE</text>
+    <text x="605" y="72" text-anchor="middle">0.660</text>
+    <line x1="605" y1="80" x2="605" y2="195" stroke="#742a2a" stroke-width="1"/>
+
+    <rect x="650" y="120" width="100" height="40" rx="4" fill="#bbf7d0" stroke="#166534" stroke-width="2"/>
+    <text x="700" y="138" text-anchor="middle" font-weight="700">16: cot_sft_sae</text>
+    <text x="700" y="152" text-anchor="middle" font-weight="700">0.650 ✓</text>
+    <line x1="700" y1="160" x2="700" y2="195" stroke="#166534" stroke-width="2"/>
+  </g>
+</svg>
+<div class="figure-caption"><strong>Figure 3.</strong> Phase timeline. <span class="pill positive">green</span> = positive result; <span class="pill negative">red</span> = below the <code>full</code> reference baseline; <span class="pill" style="background:#fef3c7;color:#92400e">yellow</span> = mixed (0.467 < <code>no_verifier</code> = 0.540).</div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="headline">4. Headline results</h2>
+
+<p>
+Goal accuracy on the held-out range <code>[40000, 40200)</code>. Bars sorted from lowest to highest.
+</p>
+
+<div class="figure">
+<svg viewBox="0 0 800 540" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, sans-serif" font-size="12">
+  <!-- y-axis -->
+  <line x1="220" y1="40" x2="220" y2="500" stroke="#444" stroke-width="1.5"/>
+  <!-- gridlines -->
+  <g stroke="#e2e8f0" stroke-width="1">
+    <line x1="220" y1="500" x2="780" y2="500"/>
+    <line x1="220" y1="430" x2="780" y2="430" stroke-dasharray="2,3"/>
+    <line x1="220" y1="360" x2="780" y2="360" stroke-dasharray="2,3"/>
+    <line x1="220" y1="290" x2="780" y2="290" stroke-dasharray="2,3"/>
+    <line x1="220" y1="220" x2="780" y2="220" stroke-dasharray="2,3"/>
+    <line x1="220" y1="150" x2="780" y2="150" stroke-dasharray="2,3"/>
+    <line x1="220" y1="80" x2="780" y2="80" stroke-dasharray="2,3"/>
+  </g>
+  <!-- x-axis labels -->
+  <g font-size="11" fill="#475569" text-anchor="middle">
+    <text x="220" y="518">0.0</text>
+    <text x="290" y="518">0.1</text>
+    <text x="360" y="518">0.2</text>
+    <text x="430" y="518">0.3</text>
+    <text x="500" y="518">0.4</text>
+    <text x="570" y="518">0.5</text>
+    <text x="640" y="518">0.6</text>
+    <text x="710" y="518">0.7</text>
+    <text x="780" y="518">0.8</text>
+  </g>
+  <text x="500" y="535" text-anchor="middle" font-size="12" fill="#475569">goal_accuracy on held-out 200 specimens</text>
+
+  <!-- ceiling reference line at 0.695 -->
+  <line x1="706.5" y1="40" x2="706.5" y2="500" stroke="#166534" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="708" y="35" font-size="10" fill="#166534">full = 0.695 (ceiling)</text>
+
+  <!-- bars (sorted ascending) -->
+  <!-- naked = 0.000 -->
+  <rect x="220" y="50" width="0" height="32" fill="#94a3b8"/>
+  <text x="215" y="71" text-anchor="end" font-size="11">naked</text>
+  <text x="223" y="71" font-size="10" fill="#666">0.000</text>
+
+  <!-- naked_vision = 0.000 -->
+  <rect x="220" y="90" width="0" height="32" fill="#94a3b8"/>
+  <text x="215" y="111" text-anchor="end" font-size="11">naked_vision</text>
+  <text x="223" y="111" font-size="10" fill="#666">0.000</text>
+
+  <!-- probe_head = 0.110 -->
+  <rect x="220" y="130" width="77" height="32" fill="#94a3b8"/>
+  <text x="215" y="151" text-anchor="end" font-size="11">probe_head</text>
+  <text x="300" y="151" font-size="10" fill="#444">0.110</text>
+
+  <!-- cot_sft = 0.467 -->
+  <rect x="220" y="170" width="326.9" height="32" fill="#fbbf24"/>
+  <text x="215" y="191" text-anchor="end" font-size="11">cot_sft</text>
+  <text x="551" y="191" font-size="10" fill="#444">0.467</text>
+
+  <!-- no_verifier = 0.540 -->
+  <rect x="220" y="210" width="378" height="32" fill="#a78bfa"/>
+  <text x="215" y="231" text-anchor="end" font-size="11">no_verifier</text>
+  <text x="602" y="231" font-size="10" fill="#444">0.540</text>
+
+  <!-- full_probes = 0.562 (dup) -->
+  <rect x="220" y="250" width="393.4" height="32" fill="#fca5a5"/>
+  <text x="215" y="271" text-anchor="end" font-size="11">full_probes*</text>
+  <text x="617" y="271" font-size="10" fill="#444">0.562</text>
+
+  <!-- full_sae_causal = 0.570 -->
+  <rect x="220" y="290" width="399" height="32" fill="#fca5a5"/>
+  <text x="215" y="311" text-anchor="end" font-size="11">full_sae_causal</text>
+  <text x="623" y="311" font-size="10" fill="#444">0.570</text>
+
+  <!-- full_sae = 0.585 -->
+  <rect x="220" y="330" width="409.5" height="32" fill="#fca5a5"/>
+  <text x="215" y="351" text-anchor="end" font-size="11">full_sae</text>
+  <text x="633" y="351" font-size="10" fill="#444">0.585</text>
+
+  <!-- cot_sft_sae = 0.650 -->
+  <rect x="220" y="370" width="455" height="32" fill="#34d399" stroke="#166534" stroke-width="1.5"/>
+  <text x="215" y="391" text-anchor="end" font-size="11" font-weight="700">cot_sft_sae ★</text>
+  <text x="679" y="391" font-size="11" fill="#166534" font-weight="700">0.650</text>
+
+  <!-- full_steered_6844 = 0.660 -->
+  <rect x="220" y="410" width="462" height="32" fill="#fca5a5"/>
+  <text x="215" y="431" text-anchor="end" font-size="11">full_steered_6844</text>
+  <text x="686" y="431" font-size="10" fill="#444">0.660</text>
+
+  <!-- full = 0.695 -->
+  <rect x="220" y="450" width="486.5" height="32" fill="#34d399" stroke="#166534" stroke-width="1.5"/>
+  <text x="215" y="471" text-anchor="end" font-size="11" font-weight="700">full ★</text>
+  <text x="711" y="471" font-size="11" fill="#166534" font-weight="700">0.695</text>
+</svg>
+<div class="figure-caption">
+<strong>Figure 4.</strong> Goal accuracy across all evaluated baselines.
+<span class="pill positive">★</span> = the two architectural positives (verifier-using <code>full</code> and single-shot <code>cot_sft_sae</code>).
+<span class="pill" style="background:#fca5a5;color:#742a2a">red</span> = inference-time representation-injection variants (all below <code>full</code>).
+<span class="pill" style="background:#a78bfa;color:#3730a3">purple</span> = no-verifier OHVD baseline.
+* <code>full_probes</code> headline computed over a 400-line JSONL with duplicate contamination; qualitative finding (probe injection hurts) holds.
+</div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="phases">5. Phase-by-phase results</h2>
+
+<table>
+<tr>
+<th>Phase</th>
+<th>Variant</th>
+<th>Pathway</th>
+<th>When evidence reaches LLM</th>
+<th class="num">goal_acc</th>
+<th>Outcome</th>
+</tr>
+<tr><td>8a</td><td><code>naked</code></td><td>One-shot LLM, no FM</td><td>—</td><td class="num">0.000</td><td><span class="pill negative">floor</span></td></tr>
+<tr><td>8a</td><td><code>no_verifier</code></td><td>OHVD loop, FM tools, verifier always PASS</td><td>inference (typed JSON)</td><td class="num">0.540</td><td><span class="pill neutral">baseline</span></td></tr>
+<tr class="highlight"><td>8a</td><td><code>full</code></td><td>OHVD loop + multi-source verifier (V4)</td><td>inference + iterative</td><td class="num">0.695</td><td><span class="pill positive">ceiling</span></td></tr>
+<tr class="negative-row"><td>9</td><td>connector tokens</td><td>FM2 hidden state as soft tokens</td><td>inference</td><td class="num">below</td><td><span class="pill negative">−</span></td></tr>
+<tr class="negative-row"><td>10</td><td>SSL backbone</td><td>masked-RDF FM2 + probing</td><td>upstream pretraining</td><td class="num">below</td><td><span class="pill negative">−</span></td></tr>
+<tr><td>11</td><td><code>cot_sft</code> (probes-only)</td><td>LoRA-SFT on synthetic CoT</td><td><strong>training</strong></td><td class="num">0.467</td><td><span class="pill" style="background:#fef3c7;color:#92400e">mixed</span></td></tr>
+<tr class="negative-row"><td>12</td><td><code>full_probes</code></td><td>probes injected into prompt</td><td>inference</td><td class="num">0.562*</td><td><span class="pill negative">−</span></td></tr>
+<tr class="negative-row"><td>13</td><td><code>full_sae</code></td><td>SAE feature labels in prompt</td><td>inference</td><td class="num">0.585</td><td><span class="pill negative">−</span></td></tr>
+<tr class="negative-row"><td>14</td><td><code>full_sae_causal</code></td><td>causally filtered SAE labels in prompt</td><td>inference</td><td class="num">0.570</td><td><span class="pill negative">−</span></td></tr>
+<tr class="negative-row"><td>15</td><td><code>full_steered_6844</code></td><td>Qwen residual SAE, ablate fid=6844</td><td>inference (activation)</td><td class="num">0.660</td><td><span class="pill negative">−</span></td></tr>
+<tr class="highlight"><td>16</td><td><code>cot_sft_sae</code></td><td>SFT on probe + SAE-augmented CoT</td><td><strong>training</strong></td><td class="num">0.650</td><td><span class="pill positive">+</span></td></tr>
+<tr><td>16</td><td><code>probe_head</code></td><td>FM head only, no LLM</td><td>—</td><td class="num">0.110</td><td><span class="pill neutral">reference</span></td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="findings">6. Architectural findings</h2>
+
+<div class="grid-2">
+<div>
+<h3 style="margin-top:0">Positive 1: multi-source verifier</h3>
+<p>
+<code>no_verifier = 0.540</code> &rarr; <code>full = 0.695</code>: <strong>+15.5 points</strong>.
+The verifier provides three things:
+</p>
+<ul>
+<li><strong>Independent verification</strong> against five oracles (rule_library, literature, cross_fm, simulator, conformal).</li>
+<li><strong>Iterative revision</strong>: CAVEAT/FAIL triggers re-deliberation in the OHVD loop.</li>
+<li><strong>Calibrated abstention</strong>: 51% of <code>full</code> commits are CAVEAT; <code>calibrated_abstention</code> = 0.59 means &asymp;60% of wrong commits get flagged.</li>
+</ul>
+</div>
+<div>
+<h3 style="margin-top:0">Positive 2: training-time CoT-SFT (Phase 16)</h3>
+<p>
+<code>probe_head = 0.110</code> (FM head alone) &rarr; <code>cot_sft = 0.467</code> (probes-only CoT-SFT) &rarr;
+<code>cot_sft_sae = 0.650</code> (probes + SAE labels in CoT-SFT). <strong>+54 over FM head</strong>; <strong>+18.3 over probes-only</strong>.
+</p>
+<p>
+Single forward, no verifier loop, no iterative revision — within 4.5 pp of the verifier ceiling.
+The mechanism: <strong>training-time supervision</strong> over the same SAE features that <em>hurt</em> when injected at inference (Phase 13).
+</p>
+</div>
+</div>
+
+<h3>The unifying principle</h3>
+
+<div class="figure">
+<svg viewBox="0 0 800 280" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, sans-serif" font-size="12">
+  <!-- divider -->
+  <line x1="400" y1="20" x2="400" y2="260" stroke="#cbd5e0" stroke-width="2" stroke-dasharray="6,4"/>
+
+  <!-- left: training-time -->
+  <text x="200" y="40" text-anchor="middle" font-size="14" font-weight="700" fill="#166534">training-time injection</text>
+  <text x="200" y="60" text-anchor="middle" font-size="11" fill="#475569">via supervised CoT-SFT</text>
+
+  <rect x="80" y="80" width="240" height="50" rx="6" fill="#bbf7d0" stroke="#166534"/>
+  <text x="200" y="100" text-anchor="middle" font-weight="600" font-size="12">Phase 11 cot_sft (probes only)</text>
+  <text x="200" y="118" text-anchor="middle" font-size="11" fill="#475569">0.467 (vs probe_head 0.110: +35.7)</text>
+
+  <rect x="80" y="145" width="240" height="55" rx="6" fill="#86efac" stroke="#166534" stroke-width="2"/>
+  <text x="200" y="166" text-anchor="middle" font-weight="700" font-size="12">Phase 16 cot_sft_sae</text>
+  <text x="200" y="183" text-anchor="middle" font-size="11" fill="#475569">0.650 (vs probes-only: +18.3)</text>
+  <text x="200" y="197" text-anchor="middle" font-size="10" fill="#166534">★ near-ceiling single-shot</text>
+
+  <text x="200" y="230" text-anchor="middle" font-size="11" fill="#166534" font-weight="600">SAE labels HELP when LLM is taught to read them</text>
+
+  <!-- right: inference-time -->
+  <text x="600" y="40" text-anchor="middle" font-size="14" font-weight="700" fill="#742a2a">inference-time injection</text>
+  <text x="600" y="60" text-anchor="middle" font-size="11" fill="#475569">via prompt or activation steering</text>
+
+  <rect x="480" y="80" width="240" height="35" rx="5" fill="#fed7d7" stroke="#742a2a"/>
+  <text x="600" y="103" text-anchor="middle" font-size="11">P9 connector  ·  <tspan font-weight="600">below full</tspan></text>
+
+  <rect x="480" y="120" width="240" height="35" rx="5" fill="#fed7d7" stroke="#742a2a"/>
+  <text x="600" y="143" text-anchor="middle" font-size="11">P12 probes in prompt  ·  <tspan font-weight="600">0.562*</tspan></text>
+
+  <rect x="480" y="160" width="240" height="35" rx="5" fill="#fed7d7" stroke="#742a2a"/>
+  <text x="600" y="183" text-anchor="middle" font-size="11">P13 SAE labels in prompt  ·  <tspan font-weight="600">0.585</tspan></text>
+
+  <rect x="480" y="200" width="240" height="35" rx="5" fill="#fed7d7" stroke="#742a2a"/>
+  <text x="600" y="223" text-anchor="middle" font-size="11">P14 causal SAE in prompt  ·  <tspan font-weight="600">0.570</tspan></text>
+
+  <text x="600" y="260" text-anchor="middle" font-size="11" fill="#742a2a" font-weight="600">SAE labels HURT when injected without supervision</text>
+</svg>
+<div class="figure-caption">
+<strong>Figure 5.</strong> Training-time vs inference-time injection of the same SAE features. The same labels, the same FM,
+the same LLM &mdash; but the pathway flips the result from a 18-point gain (training-time) to an 11-point loss (inference-time).
+</div>
+</div>
+
+<div class="callout">
+<strong>Why training-time wins:</strong> the LLM has fixed reasoning capacity per turn. Adding richer evidence to its
+prompt at inference makes it <em>anchor</em> on that evidence rather than synthesize it with the FM tool messages.
+On clear-cut specimens (PASS bucket) the anchoring is harmless; on borderline specimens (CAVEAT bucket) it lowers
+accuracy &mdash; the verdict-stratified data shows the <code>full_sae</code> drop is <strong>essentially all in the
+CAVEAT bucket</strong> (PASS: −3 pp, CAVEAT: −19 pp).
+</div>
+
+<!-- ============================================================ -->
+<h2 id="verdict">7. Verdict-stratified breakdown</h2>
+
+<p>
+The verifier tags each commit with a verdict. Three derived metrics:
+</p>
+
+<ul>
+<li><code>commit_rate</code> &mdash; fraction of specimens that received a commit (1.000 means none budget-exhausted).</li>
+<li><code>hallucination_rate</code> &mdash; <code>wrong-PASS / total-PASS</code>. PASS commits the verifier OK'd that turned out wrong.</li>
+<li><code>calibrated_abstention</code> &mdash; <code>wrong-CAVEAT / total-wrong</code>. Of all wrong commits, what fraction did the verifier catch.</li>
+</ul>
+
+<table>
+<tr>
+<th>Baseline</th><th class="num">commit_rate</th><th class="num">hallucination_rate</th><th class="num">calibrated_abstention</th><th>verdict P/C/N</th>
+</tr>
+<tr class="highlight"><td><code>full</code></td><td class="num">1.000</td><td class="num">0.255</td><td class="num">0.590</td><td>98 / 102 / 0</td></tr>
+<tr><td><code>full_probes</code> (dup)</td><td class="num">1.000</td><td class="num">0.310</td><td class="num">0.669</td><td>187 / 213 / 0</td></tr>
+<tr><td><code>full_sae</code></td><td class="num">1.000</td><td class="num">0.286</td><td class="num">0.663</td><td>98 / 102 / 0</td></tr>
+<tr><td><code>full_sae_causal</code></td><td class="num">1.000</td><td class="num">0.286</td><td class="num">0.674</td><td>98 / 102 / 0</td></tr>
+<tr><td><code>full_steered_6844</code></td><td class="num">1.000</td><td class="num">0.316</td><td class="num">0.544</td><td>98 / 102 / 0</td></tr>
+</table>
+
+<p class="small">
+For no-verifier rows (<code>cot_sft</code>, <code>cot_sft_sae</code>, <code>probe_head</code>, <code>naked</code>),
+<code>verdict P/C/N = 0/0/N</code> because no verifier was run. Goal accuracy is computed against ground truth directly.
+</p>
+
+<div class="figure">
+<svg viewBox="0 0 800 360" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, sans-serif" font-size="12">
+  <text x="400" y="25" text-anchor="middle" font-size="14" font-weight="700" fill="#1a4365">PASS vs CAVEAT bucket accuracy</text>
+
+  <!-- y-axis -->
+  <line x1="120" y1="60" x2="120" y2="320" stroke="#444" stroke-width="1.5"/>
+  <text x="40" y="190" font-size="11" fill="#475569" transform="rotate(-90 50 190)">accuracy in bucket</text>
+
+  <!-- gridlines -->
+  <g stroke="#e2e8f0" stroke-width="1">
+    <line x1="120" y1="320" x2="780" y2="320"/>
+    <line x1="120" y1="270" x2="780" y2="270" stroke-dasharray="2,3"/>
+    <line x1="120" y1="220" x2="780" y2="220" stroke-dasharray="2,3"/>
+    <line x1="120" y1="170" x2="780" y2="170" stroke-dasharray="2,3"/>
+    <line x1="120" y1="120" x2="780" y2="120" stroke-dasharray="2,3"/>
+    <line x1="120" y1="70" x2="780" y2="70" stroke-dasharray="2,3"/>
+  </g>
+  <g font-size="10" fill="#475569" text-anchor="end">
+    <text x="115" y="324">0%</text>
+    <text x="115" y="274">20%</text>
+    <text x="115" y="224">40%</text>
+    <text x="115" y="174">60%</text>
+    <text x="115" y="124">80%</text>
+    <text x="115" y="74">100%</text>
+  </g>
+
+  <!-- bars: full PASS=74.5%, CAVEAT=64.7%; full_sae PASS=71.4%, CAVEAT=46.1% -->
+  <!-- bar: full PASS = 74.5% -->
+  <rect x="180" y="135.6" width="60" height="184.4" fill="#34d399" stroke="#166534"/>
+  <text x="210" y="129" text-anchor="middle" font-size="11" font-weight="600">74.5%</text>
+  <text x="210" y="340" text-anchor="middle" font-size="11">full</text>
+  <text x="210" y="354" text-anchor="middle" font-size="9" fill="#666">PASS</text>
+
+  <!-- bar: full CAVEAT = 64.7% -->
+  <rect x="260" y="158.3" width="60" height="161.7" fill="#fbbf24" stroke="#92400e"/>
+  <text x="290" y="151" text-anchor="middle" font-size="11" font-weight="600">64.7%</text>
+  <text x="290" y="340" text-anchor="middle" font-size="11">full</text>
+  <text x="290" y="354" text-anchor="middle" font-size="9" fill="#666">CAVEAT</text>
+
+  <!-- bar: full_sae PASS = 71.4% -->
+  <rect x="400" y="143.1" width="60" height="176.9" fill="#34d399" opacity="0.5" stroke="#166534"/>
+  <text x="430" y="136" text-anchor="middle" font-size="11" font-weight="600">71.4%</text>
+  <text x="430" y="340" text-anchor="middle" font-size="11">full_sae</text>
+  <text x="430" y="354" text-anchor="middle" font-size="9" fill="#666">PASS</text>
+  <line x1="170" y1="135.6" x2="490" y2="135.6" stroke="#166534" stroke-width="1" stroke-dasharray="4,3" opacity="0.4"/>
+
+  <!-- bar: full_sae CAVEAT = 46.1% -->
+  <rect x="480" y="204.6" width="60" height="115.4" fill="#fbbf24" opacity="0.4" stroke="#92400e"/>
+  <text x="510" y="197" text-anchor="middle" font-size="11" font-weight="600">46.1%</text>
+  <text x="510" y="340" text-anchor="middle" font-size="11">full_sae</text>
+  <text x="510" y="354" text-anchor="middle" font-size="9" fill="#666">CAVEAT</text>
+
+  <!-- annotations -->
+  <g font-size="11">
+    <text x="350" y="100" font-weight="600" fill="#475569">PASS bucket: only −3 pp</text>
+    <line x1="240" y1="135.6" x2="400" y2="143.1" stroke="#475569" stroke-width="1.5"/>
+
+    <text x="600" y="225" font-weight="700" fill="#742a2a">CAVEAT bucket: −19 pp</text>
+    <line x1="320" y1="158.3" x2="480" y2="204.6" stroke="#c53030" stroke-width="2"/>
+
+    <rect x="615" y="280" width="14" height="14" fill="#34d399" stroke="#166534"/>
+    <text x="635" y="291">PASS</text>
+    <rect x="615" y="300" width="14" height="14" fill="#fbbf24" stroke="#92400e"/>
+    <text x="635" y="311">CAVEAT</text>
+  </g>
+</svg>
+<div class="figure-caption">
+<strong>Figure 6.</strong> Adding SAE labels to the prompt (<code>full_sae</code> vs <code>full</code>) costs almost nothing on the PASS bucket but is severely punishing on the CAVEAT bucket &mdash; exactly where multi-source reasoning is needed. The 11-point headline gap is essentially all in the CAVEAT bucket.
+</div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="phase16">8. Phase 16 deep dive: the positive recipe</h2>
+
+<p>
+Phase 16 trained a LoRA-tuned Qwen on synthetic CoT records that explicitly read both probe outputs and SAE-derived
+feature labels. The training signal: ground-truth final commits anchored to a deterministic four-step reasoning chain
+the LLM learns to produce.
+</p>
+
+<div class="figure">
+<svg viewBox="0 0 800 320" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, sans-serif" font-size="11">
+  <!-- training pipeline -->
+  <text x="400" y="25" text-anchor="middle" font-size="14" font-weight="700" fill="#1a4365">Phase 16 — synthetic CoT record format</text>
+
+  <!-- input (FM2 evidence) -->
+  <rect x="40" y="50" width="200" height="120" rx="6" fill="#fce7f3" stroke="#9d174d"/>
+  <text x="140" y="72" text-anchor="middle" font-weight="600">FM2 representation</text>
+  <text x="140" y="92" text-anchor="middle" font-size="10" fill="#475569">CLS embedding (320-d)</text>
+  <line x1="140" y1="100" x2="140" y2="115" stroke="#9d174d" stroke-width="1"/>
+  <rect x="60" y="115" width="160" height="22" fill="#fff" stroke="#9d174d" stroke-width="1"/>
+  <text x="140" y="130" text-anchor="middle" font-size="10">5 hand-picked probes</text>
+  <rect x="60" y="142" width="160" height="22" fill="#fff" stroke="#9d174d" stroke-width="1"/>
+  <text x="140" y="157" text-anchor="middle" font-size="10">Top-K SAE (1024 features)</text>
+
+  <!-- arrow -->
+  <line x1="240" y1="110" x2="280" y2="110" stroke="#444" stroke-width="1.5" marker-end="url(#arrow16)"/>
+
+  <!-- CoT chain -->
+  <rect x="285" y="50" width="280" height="220" rx="6" fill="#fff" stroke="#5b21b6" stroke-width="2"/>
+  <text x="425" y="70" text-anchor="middle" font-weight="700" fill="#5b21b6">Synthetic CoT chain</text>
+
+  <rect x="295" y="80" width="260" height="32" fill="#ede9fe" rx="3"/>
+  <text x="305" y="96" font-size="11" font-weight="600">Step 1 — Read probes:</text>
+  <text x="305" y="108" font-size="10" fill="#475569">"n_atoms ≈ 11, motif_logits favor tri_disk..."</text>
+
+  <rect x="295" y="118" width="260" height="32" fill="#ede9fe" rx="3"/>
+  <text x="305" y="134" font-size="11" font-weight="600">Step 1b — Read SAE labels:</text>
+  <text x="305" y="146" font-size="10" fill="#475569">"f24: tri-disk-solid + n=11 (act 4.2), f87..."</text>
+
+  <rect x="295" y="156" width="260" height="32" fill="#ede9fe" rx="3"/>
+  <text x="305" y="172" font-size="11" font-weight="600">Step 2 — Cross-check:</text>
+  <text x="305" y="184" font-size="10" fill="#475569">"coordination 2.0 → ring; both probes agree"</text>
+
+  <rect x="295" y="194" width="260" height="32" fill="#ede9fe" rx="3"/>
+  <text x="305" y="210" font-size="11" font-weight="600">Step 3 — Resolution:</text>
+  <text x="305" y="222" font-size="10" fill="#475569">"Defer to highest-confidence probe..."</text>
+
+  <rect x="295" y="232" width="260" height="32" fill="#dcfce7" stroke="#166534" rx="3"/>
+  <text x="305" y="248" font-size="11" font-weight="700" fill="#166534">Final commit (ground truth):</text>
+  <text x="305" y="260" font-size="10" fill="#166534">{"motif": "ring", "n_atoms": 11, "T": 0.20}</text>
+
+  <!-- arrow to LLM -->
+  <line x1="565" y1="160" x2="605" y2="160" stroke="#444" stroke-width="1.5" marker-end="url(#arrow16)"/>
+
+  <!-- LoRA SFT -->
+  <rect x="610" y="125" width="170" height="80" rx="6" fill="#fff7ed" stroke="#9a3412" stroke-width="2"/>
+  <text x="695" y="148" text-anchor="middle" font-weight="700" fill="#9a3412">LoRA SFT</text>
+  <text x="695" y="166" text-anchor="middle" font-size="11">Qwen 2.5 7B</text>
+  <text x="695" y="182" text-anchor="middle" font-size="10" fill="#475569">3 epochs, 4×H100 DDP</text>
+  <text x="695" y="195" text-anchor="middle" font-size="10" fill="#475569">~10K records</text>
+
+  <text x="695" y="240" text-anchor="middle" font-size="14" font-weight="700" fill="#166534">cot_sft_sae</text>
+  <text x="695" y="258" text-anchor="middle" font-size="20" font-weight="700" fill="#166534">0.650</text>
+
+  <defs>
+    <marker id="arrow16" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#444"/>
+    </marker>
+  </defs>
+</svg>
+<div class="figure-caption">
+<strong>Figure 7.</strong> The Phase 16 recipe. SAE features and probes both feed Step 1/1b of a deterministic CoT chain; the Final commit comes from ground truth. The trained LoRA learns to produce both the chain and the commit at inference.
+</div>
+</div>
+
+<h3>Decomposition of the lift</h3>
+
+<table>
+<tr><th>Reference</th><th class="num">goal_accuracy</th><th>Δ vs cot_sft_sae</th></tr>
+<tr><td><code>probe_head</code> (FM head only)</td><td class="num">0.110</td><td><span class="pill positive">+54.0</span> LLM beats FM head by huge margin</td></tr>
+<tr><td><code>cot_sft</code> (probes-only CoT-SFT)</td><td class="num">0.467</td><td><span class="pill positive">+18.3</span> SAE features add training signal beyond probes</td></tr>
+<tr class="highlight"><td><strong><code>cot_sft_sae</code></strong></td><td class="num"><strong>0.650</strong></td><td><strong>reference</strong></td></tr>
+<tr><td><code>full</code> (verifier ceiling)</td><td class="num">0.695</td><td><span class="pill neutral">−4.5</span> single-shot LLM nearly matches Pipeline A</td></tr>
+</table>
+
+<div class="callout positive">
+<strong>The transferable claims:</strong>
+<ol>
+<li><strong>Training-time CoT over rich evidence is the pathway that works.</strong> Phases 13/14 injected the same SAE labels at inference and lost 11&ndash;13 pp; Phase 16 trained the LLM to read them and gained 18 pp over probes-only.</li>
+<li><strong>The LLM is not a lossy filter on the FM head.</strong> When supervised correctly, it substantially exceeds the FM's own downstream head (+54 pp).</li>
+<li><strong>Failure modes can be moved by training-data design</strong> &mdash; see &sect;9.</li>
+</ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="failure">9. Failure-mode shifts</h2>
+
+<p>
+<code>full</code> and <code>cot_sft_sae</code> have <strong>qualitatively different</strong> wrong-claim sets. The Phase 16 recipe partially repairs the ring failure mode that Pipeline A is 100% wrong on, at modest cost on the safest group.
+</p>
+
+<div class="figure">
+<svg viewBox="0 0 780 290" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, sans-serif" font-size="12">
+  <text x="390" y="25" text-anchor="middle" font-size="14" font-weight="700" fill="#1a4365">Per-(motif, phase) accuracy: full vs cot_sft_sae</text>
+
+  <!-- y-axis -->
+  <line x1="180" y1="60" x2="180" y2="240" stroke="#444" stroke-width="1.5"/>
+  <g stroke="#e2e8f0" stroke-width="1">
+    <line x1="180" y1="240" x2="730" y2="240"/>
+    <line x1="180" y1="195" x2="730" y2="195" stroke-dasharray="2,3"/>
+    <line x1="180" y1="150" x2="730" y2="150" stroke-dasharray="2,3"/>
+    <line x1="180" y1="105" x2="730" y2="105" stroke-dasharray="2,3"/>
+    <line x1="180" y1="60" x2="730" y2="60" stroke-dasharray="2,3"/>
+  </g>
+  <g font-size="10" fill="#475569" text-anchor="end">
+    <text x="175" y="244">0%</text>
+    <text x="175" y="199">25%</text>
+    <text x="175" y="154">50%</text>
+    <text x="175" y="109">75%</text>
+    <text x="175" y="64">100%</text>
+  </g>
+
+  <!-- groups -->
+  <!-- ring liquid: full=0%, cot=33% -->
+  <rect x="220" y="240" width="40" height="0" fill="#34d399" stroke="#166534"/>
+  <rect x="265" y="180.6" width="40" height="59.4" fill="#a78bfa" stroke="#5b21b6"/>
+  <text x="262" y="259" text-anchor="middle" font-size="10">ring</text>
+  <text x="262" y="271" text-anchor="middle" font-size="9" fill="#666">liquid</text>
+  <text x="240" y="234" text-anchor="middle" font-size="9" fill="#742a2a">0%</text>
+  <text x="285" y="176" text-anchor="middle" font-size="9" font-weight="600">33%</text>
+
+  <!-- ring solid: full=0%, cot=43% -->
+  <rect x="345" y="240" width="40" height="0" fill="#34d399" stroke="#166534"/>
+  <rect x="390" y="162.6" width="40" height="77.4" fill="#a78bfa" stroke="#5b21b6"/>
+  <text x="387" y="259" text-anchor="middle" font-size="10">ring</text>
+  <text x="387" y="271" text-anchor="middle" font-size="9" fill="#666">solid</text>
+  <text x="365" y="234" text-anchor="middle" font-size="9" fill="#742a2a">0%</text>
+  <text x="410" y="158" text-anchor="middle" font-size="9" font-weight="600">43%</text>
+
+  <!-- tri-disk liquid: full=31%, cot=34% -->
+  <rect x="470" y="184.2" width="40" height="55.8" fill="#34d399" stroke="#166534"/>
+  <rect x="515" y="178.8" width="40" height="61.2" fill="#a78bfa" stroke="#5b21b6"/>
+  <text x="512" y="259" text-anchor="middle" font-size="10">tri-disk</text>
+  <text x="512" y="271" text-anchor="middle" font-size="9" fill="#666">liquid</text>
+  <text x="490" y="180" text-anchor="middle" font-size="9">31%</text>
+  <text x="535" y="174" text-anchor="middle" font-size="9">34%</text>
+
+  <!-- tri-disk solid: full=88%, cot=76% -->
+  <rect x="595" y="81.6" width="40" height="158.4" fill="#34d399" stroke="#166534"/>
+  <rect x="640" y="103.2" width="40" height="136.8" fill="#a78bfa" stroke="#5b21b6"/>
+  <text x="637" y="259" text-anchor="middle" font-size="10">tri-disk</text>
+  <text x="637" y="271" text-anchor="middle" font-size="9" fill="#666">solid</text>
+  <text x="615" y="77" text-anchor="middle" font-size="9" font-weight="600">88%</text>
+  <text x="660" y="99" text-anchor="middle" font-size="9" font-weight="600">76%</text>
+
+  <!-- legend -->
+  <rect x="270" y="40" width="14" height="14" fill="#34d399" stroke="#166534"/>
+  <text x="290" y="51" font-size="11">full (verifier)</text>
+  <rect x="395" y="40" width="14" height="14" fill="#a78bfa" stroke="#5b21b6"/>
+  <text x="415" y="51" font-size="11">cot_sft_sae (no verifier)</text>
+</svg>
+<div class="figure-caption">
+<strong>Figure 8.</strong> The Phase 16 recipe partially repairs the ring failure mode (0% &rarr; 33-43%) that
+<code>full</code> is fully wrong on, at a modest cost on tri-disk-solid (88% &rarr; 76%). The wrong-claim sets are qualitatively different &mdash; their union is smaller than either alone, motivating the verifier-with-adapter combination as a follow-up.
+</div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="limits">10. Limitations &amp; caveats</h2>
+
+<p>
+Every claim above is bounded by the setup:
+</p>
+
+<table>
+<tr><th>Dimension</th><th>Our setup</th><th>Real-world systems often use</th></tr>
+<tr><td>LLM</td><td>Qwen 2.5 7B Instruct, <strong>frozen</strong>, 4-bit nf4</td><td>frontier reasoning models, full precision, sometimes joint fine-tuned</td></tr>
+<tr><td>Task type</td><td>discretized 3-tuple classification</td><td>open-ended generation, scientific dialogue, planning</td></tr>
+<tr><td>World</td><td>closed synthetic (LJ clusters, generative model known)</td><td>open with domain shift, observational noise, novel categories</td></tr>
+<tr><td>FM size</td><td>6-depth transformers (small)</td><td>order-of-magnitude larger production FMs</td></tr>
+<tr><td>SAE training data</td><td>20K (P13/14) or <strong>200</strong> (P15)</td><td>1B+ in Templeton et al.</td></tr>
+<tr><td>Verifier sources</td><td>5 hand-coded oracles with perfect ground truth</td><td>imperfect, noisy, costly</td></tr>
+</table>
+
+<div class="callout warning">
+<strong>What our negatives are <em>not</em>:</strong> all five are regime-specific, not architectural absolutes.
+A frontier reasoning LLM, an open-ended task, larger SAE training data, multi-token activation harvest, or a coefficient sweep
+could each plausibly flip individual results. The data supports
+&ldquo;<em>under these conditions on this task</em>, two pathways achieve near-ceiling and inference-time injection underperforms.&rdquo;
+Stronger claims require lifting one or more constraints.
+</div>
+
+<h3>Known data-hygiene issues</h3>
+
+<ul>
+<li><code>full_probes/.../trajectories.jsonl</code> has 400 lines for 200 specimens (resume appended duplicates). Headline 0.562 computed over duplicates; qualitative finding (probe injection hurts) holds.</li>
+<li><code>naked_vision = 0.000</code> not validated &mdash; consistent with &ldquo;BLIP captions add no useful structural info,&rdquo; but the &ldquo;all 200 commits identical default JSON&rdquo; diagnostic was not run.</li>
+<li><code>full = 0.695</code> requires <code>literature_compare_energy=False</code>. With strict literature mode the headline was <code>0.471</code>. Document this in any external writeup.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="open">11. Open questions &amp; bets</h2>
+
+<h3>Highest-ROI follow-up (~30–50 min on remote)</h3>
+
+<div class="callout positive">
+<strong>Combine the Phase 16 adapter with the Phase 4-8a verifier.</strong>
+<code>full</code> is wrong on rings 100% of the time; <code>cot_sft_sae</code> partially repairs that (33-43%) at a modest cost on tri-disk-solid (88% &rarr; 76%). The two pipelines have qualitatively different wrong-claim sets &mdash; wrapping the trained adapter inside the OHVD loop is plausible to reach 0.72-0.76.
+</div>
+
+<h3>Open questions (within the existing testbed)</h3>
+
+<table>
+<tr><th>Question</th><th>What it tests</th><th>Cost</th><th>Predicted ceiling</th></tr>
+<tr><td><strong>A:</strong> CoT at scale (Stages 3-4 of P11)</td><td>STaR rejection-sampling + GRPO with verifier reward</td><td>1-2 weeks</td><td>0.70+ on top of <code>cot_sft_sae</code></td></tr>
+<tr><td><strong>B:</strong> SAE at scale on Qwen activations</td><td>multi-token harvest, larger trajectory source &rarr; 50K-200K activations</td><td>~1 week</td><td>could flip Phase 15 result</td></tr>
+<tr><td><strong>C:</strong> Coefficient sweep on Phase 15</td><td>15 experiments × <code>fid</code> × <code>coef</code> sweep</td><td>~1 day GPU</td><td>likely null; informative for falsification</td></tr>
+<tr><td><strong>D:</strong> Clean rerun of <code>full_probes</code></td><td>de-duplication of the 400-line JSONL</td><td>~30-50 min</td><td>tighter number for the negative</td></tr>
+</table>
+
+<h3>Three bets for new research</h3>
+
+<ol>
+<li><strong>Mechanistic interp of LLM-FM coupling at scale</strong> &mdash; Templeton-on-Qwen-with-tools. 1-2 researcher-years; modest theoretical risk; well-trodden methodology.</li>
+<li><strong>Causal abstraction between FM and LLM</strong> &mdash; formal correspondence between FM features and LLM concepts via interventions. 2-3 researcher-years; novel methodology; high payoff.</li>
+<li><strong>Reframe the testbed for open-ended discovery</strong> &mdash; tasks where labels can't carry the load (anomaly detection, interpolation, active experimental design, hypothesis generation). The narrow-classification regime is exhausted; the field's open architectural questions plausibly resolve differently in open-ended regimes.</li>
+</ol>
+
+<!-- ============================================================ -->
+<div class="footer">
+<p>
+Compiled from <code>docs/handover/01–10</code> on the <code>main</code> branch.
+The progress narrative per phase lives under <code>docs/progress/</code>; per-phase audits under <code>docs/audits/</code>.
+The held-out range and goal-accuracy logic are locked at commit <code>c723eaa</code>.
+</p>
+<p>
+Repository: <a href="https://github.com/colpark/FMLLMadvantage">github.com/colpark/FMLLMadvantage</a> &middot;
+LLM: Qwen 2.5 7B Instruct (frozen) &middot;
+FMs: small image / RDF / trajectory transformers &middot;
+Verifier: 5-source aggregation (rule_library, literature, cross_fm, simulator, conformal)
+</p>
+</div>
+
+</div>
+</body>
+</html>
