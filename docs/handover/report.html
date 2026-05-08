@@ -812,11 +812,33 @@ the LLM learns to produce.
 
 <table>
 <tr><th>Reference</th><th class="num">goal_accuracy</th><th>Δ vs cot_sft_sae</th></tr>
-<tr><td><code>probe_head</code> (FM head only)</td><td class="num">0.110</td><td><span class="pill positive">+54.0</span> LLM beats FM head by huge margin</td></tr>
+<tr><td><code>probe_head</code> (naive FM-head aggregation)<sup>†</sup></td><td class="num">0.110</td><td><span class="pill positive">+54.0</span> headline number — see caveat below</td></tr>
 <tr><td><code>cot_sft</code> (probes-only CoT-SFT)</td><td class="num">0.467</td><td><span class="pill positive">+18.3</span> SAE features add training signal beyond probes</td></tr>
 <tr class="highlight"><td><strong><code>cot_sft_sae</code></strong></td><td class="num"><strong>0.650</strong></td><td><strong>reference</strong></td></tr>
 <tr><td><code>full</code> (verifier ceiling)</td><td class="num">0.695</td><td><span class="pill neutral">−4.5</span> single-shot LLM nearly matches Pipeline A</td></tr>
 </table>
+
+<div class="callout warning">
+<sup>†</sup> <strong>The +54 pp claim deserves an asterisk.</strong> <code>probe_head</code> is a <em>naive</em> FM-head baseline:
+it directly maps the existing probe-bank outputs (<code>motif</code>, <code>n_atoms</code>, <code>phase</code>,
+<code>coordination</code>, <code>peak_position</code>) to a <code>PhysicalStateClaim</code>.
+But the claim requires <code>(motif, n_atoms, temperature)</code> &mdash; and <strong>there is no temperature probe</strong>
+in the bank. <code>probe_head</code> falls back to a fixed default for T, hitting only ~20% of the [0.05, 1.00]
+range within the &plusmn;0.10 tolerance. That T bottleneck dominates the 0.110 score:
+0.75 (motif) &times; 0.70 (n_atoms) &times; 0.20 (T) &asymp; 0.105.
+
+A properly-engineered FM-head baseline &mdash; with a T probe added and a learned probe-output aggregator &mdash;
+would plausibly land at 0.30-0.50 joint, not 0.110. The honest read: <code>cot_sft_sae</code>'s lift over the FM head
+is more like <strong>+15-30 pp</strong> on a fair baseline, with the +54 pp headline reflecting probe-bank gaps as much as LLM synthesis.
+
+The <strong>+18.3 pp over <code>cot_sft</code></strong> (same probe bank, same training, only difference is whether
+SAE features were in the CoT) is the clean apples-to-apples result for the SAE contribution &mdash; that one is robust.
+
+This pitfall recurs in property-prediction setups: <em>always check whether your "FM head" baseline has a head for
+every claim axis</em> before computing the lift over it. The materials port (separate codebase) corrected this by
+training one probe per claim axis; the apples-to-apples lift on materials is +0-2 pp on joint, much smaller than the
+LJ headline suggested.
+</div>
 
 <div class="callout positive">
 <strong>The transferable claims:</strong>
